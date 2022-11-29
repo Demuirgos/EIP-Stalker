@@ -9,7 +9,7 @@ type Metadata = {
     Type    : string
     Category: string
     Created : string
-    Require : int list
+    Require : int list option
     Discussion : string option
 }
 
@@ -34,14 +34,15 @@ module Metadata =
                         match dependencies with 
                         | Some deps -> 
                             deps.Require 
-                            |> List.map (Resolve depth)
-                            |> ignore
+                            |> function 
+                            | Some deps -> deps |> List.iter (Resolve (nesting - 1))
+                            | None -> ()
                         | None -> ()
 
-            if List.isEmpty eips then [] 
+            if List.isEmpty eips then None
             else 
                 do eips |> List.iter (Resolve depth)
-                memo |> Seq.toList
+                memo |> Seq.toList |> Some
 
         let main = 
             page.Descendants["div"]
