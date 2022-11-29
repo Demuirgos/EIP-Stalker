@@ -5,8 +5,7 @@ A simple app that reports EIP-Metadata
 * run using : ``dotnet run`` or ``dotnet  build`` 
 
 ```
->> dotnet run
-<< 3540
+>> dotnet run --eip 3540 --depth 2
 >> Ok
   { Author = ["Alex Beregszaszi"; "Pawel Bylica"; "Andrei Maiboroda"]
     Status = "Review "
