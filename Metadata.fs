@@ -19,25 +19,28 @@ module Metadata =
             Some (HtmlDocument.Load(sprintf "https://eips.ethereum.org/EIPS/eip-%d" eipNum))
         with
         | _ -> None
-    let rec private ExtractMetadata (page:HtmlDocument) =
+    let rec private ExtractMetadata (depth:int) (page:HtmlDocument) =
         let rec ResolveDependencies (eips:int list) =
             let memo = new HashSet<_>()
-            let rec Resolve eip : unit =
-                if memo.Contains(eip) then ()
-                else
-                    let eipPage = Fetch eip
-                    let dependencies = Option.map ExtractMetadata eipPage  
+            let rec Resolve nesting eip : unit =
+                if nesting = 0 then 
                     ignore (memo.Add(eip))
-                    match dependencies with 
-                    | Some deps -> 
-                        deps.Require 
-                        |> List.map Resolve
-                        |> ignore
-                    | None -> ()
+                else
+                    if memo.Contains(eip) then ()
+                    else
+                        let eipPage = Fetch eip
+                        let dependencies = Option.map (ExtractMetadata  (depth - 1)) eipPage
+                        ignore (memo.Add(eip))
+                        match dependencies with 
+                        | Some deps -> 
+                            deps.Require 
+                            |> List.map (Resolve depth)
+                            |> ignore
+                        | None -> ()
 
             if List.isEmpty eips then [] 
             else 
-                do eips |> List.iter Resolve
+                do eips |> List.iter (Resolve depth)
                 memo |> Seq.toList
 
         let main = 
@@ -88,10 +91,10 @@ module Metadata =
                             |> ResolveDependencies
             }
 
-    let public FetchMetadata eip = 
+    let public FetchMetadata eip depth = 
         eip 
         |> Fetch 
         |> function 
-        | Some page -> Ok <| ExtractMetadata page
+        | Some page -> Ok <| ExtractMetadata depth page 
         | None -> Error "Failed to fetch page"
     
