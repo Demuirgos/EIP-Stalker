@@ -3,7 +3,7 @@ A simple app that reports EIP-Metadata
 
 #Usage : 
 * run using : ``dotnet run`` or ``dotnet  build`` 
-
+### Eip metadata :
 ```
 >> dotnet run --eip 3540 --depth 2
 >> Ok
@@ -16,4 +16,10 @@ A simple app that reports EIP-Metadata
     Discussion =
      Some "https://ethereum-magicians.org/t/evm-object-format-eof/5727" 
   }
+```
+### Eip change monitor :
+```
+>> dotnet run --monitor 3540
+>> Restore : map [(3540, "123456azert12345yuiop")]
+   Update  : eips changed [3540]
 ```
