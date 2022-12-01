@@ -34,5 +34,5 @@ let main args =
         Monitor.Start eips period email
         0
     else
-        printfn "Usage: --eip <eip> --depth <depth> || --monitor <eip>+"
+        printfn "Usage: --query <eip> (--depth <depth>)? || --monitor <eip>+ (--period <duration>)? (--notify <email>)?"
         1
