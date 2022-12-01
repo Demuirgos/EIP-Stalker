@@ -4,6 +4,7 @@ open FSharp.Data
 open System.Collections.Generic
 
 type Metadata = {
+    Number  : int
     Author  : string list
     Status  : string
     Type    : string
@@ -19,7 +20,7 @@ module Metadata =
             Some (HtmlDocument.Load(sprintf "https://eips.ethereum.org/EIPS/eip-%d" eipNum))
         with
         | _ -> None
-    let rec private ExtractMetadata (depth:int) (page:HtmlDocument) =
+    let rec private ExtractMetadata (eipnum:int) (depth:int) (page:HtmlDocument) =
         let rec ResolveDependencies (eips:int list) =
             let memo = new HashSet<_>()
             let rec Resolve nesting eip : unit =
@@ -78,6 +79,7 @@ module Metadata =
                 | None -> System.String.Empty
 
             { 
+                Number = eipnum
                 Author = parseList AuthorRow 
                          |> List.ofSeq; 
                 Status = parseSingle StatusRow; 
@@ -96,6 +98,6 @@ module Metadata =
         eip 
         |> Fetch 
         |> function 
-        | Some page -> Ok <| ExtractMetadata depth page 
+        | Some page -> Ok <| ExtractMetadata eip depth page 
         | None -> Error "Failed to fetch page"
     
