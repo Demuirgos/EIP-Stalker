@@ -1,16 +1,18 @@
 module Dependency.Monitor
 
-
 open System.IO
 open FSharp.Data
 open System.Net.Http
 open System.Text.Json
 open System.Net.Http.Headers
 open System.Threading
+open Dependency.Mail
+open Dependency.Core
 
 let mutable State : Map<int, string> = Map.empty
 let CancellationToken = new CancellationTokenSource()
 let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
+let GithubToken : string= failwith "Please provide a Github token"
 
 let private GetRequestWithAuth (key:string) eip =
     async {
@@ -31,6 +33,11 @@ let private SaveInFile () =
     with
         | _ -> ()
 
+let private NotifyEmail email eipnum (eip : Metadata) =
+    let subject = sprintf "EIP %i has been updated" eipnum
+    let body = sprintf "EIP %i has been updated :\n %A" eipnum eip
+    sendMailMessage email subject body ()
+
 let private ReadInFile () =
     try
         let json = File.ReadAllText(TemporaryFilePath)
@@ -50,33 +57,41 @@ let private RunEvery action (period : int) args=
 
 let private CompareDiffs (oldState : Map<int, string>) (newState : Map<int, string>) eips =
     let loop eip = 
-        let newHash = newState.[eip] 
-        let oldHash = oldState.[eip]
-        if newHash <> oldHash then 
+        let newHash = Map.tryFind eip newState
+        let oldHash = Map.tryFind eip oldState
+        match newHash, oldHash with
+        | Some newHash, Some oldHash when newHash <> oldHash -> 
             Some eip
-        else
-            None
+        | Some _, None | None, Some _ -> Some eip
+        | _ -> None
     eips |> List.map loop |> List.choose id
 
-let public Start eips= 
+let public Start eips period email= 
     ReadInFile()
-    let GetEipFileData = GetRequestWithAuth "[<Github Api Key>]"
+    let GetEipFileData = GetRequestWithAuth GithubToken
     let actions = 
         RunEvery (fun _ -> 
             let eipData = 
                 eips 
                 |> List.map (fun eip -> eip,  (GetEipFileData  eip).["sha"].AsString())
                 |> Map.ofList
-
             let changedEips = CompareDiffs State eipData eips
             match changedEips with 
             | [] -> ()
             | _ -> 
-                printfn "Changed EIPs : %A" changedEips
-                printfn "Updated : %A" State
+                printfn "Changed EIPs : %A" (changedEips |> List.map (fun eip -> Metadata.FetchMetadata eip 0))
+                match email with
+                | Some email -> 
+                    changedEips 
+                    |> List.map (fun eip -> eip, Metadata.FetchMetadata eip 0)
+                    |> List.iter (fun (eip, eipData) -> 
+                        match eipData with 
+                        | Ok data -> 
+                            NotifyEmail email eip data
+                        | _ -> ())
+                | None -> ()
                 State <- eipData
-                
-        ) 5 eips
+        ) period eips
     Async.RunSynchronously(actions, 0, CancellationToken.Token)
 
 let public Stop args = 

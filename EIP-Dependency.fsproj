@@ -5,8 +5,9 @@
     <RootNamespace>EIP_Dependency</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Monitor.fs" />
+    <Compile Include="Mail.fs" />
     <Compile Include="Metadata.fs" />
+    <Compile Include="Monitor.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
