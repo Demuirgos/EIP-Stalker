@@ -2,7 +2,11 @@
 A simple app that reports EIP-Metadata
 
 #Usage : 
-* run using : ``dotnet run`` or ``dotnet  build`` 
+ * run using : ``dotnet run`` or ``dotnet  build`` 
+
+ * cmdline args : 
+   * get eip info :``--query <eip> (--depth <depth>)?``
+   * monitor eip : ``--monitor <eip>+ (--period <duration>)? (--notify <email>)?``
 ### Eip metadata :
 ```
 >> dotnet run --query 3540 --depth 2
