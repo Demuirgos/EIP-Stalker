@@ -33,10 +33,10 @@ let private SaveInFile () =
     with
         | _ -> ()
 
-let private NotifyEmail email eipnum (eip : Metadata) =
+let private NotifyEmail config email eipnum (eip : Metadata) =
     let subject = sprintf "EIP %i has been updated" eipnum
     let body = sprintf "EIP %i has been updated :\n %A" eipnum eip
-    sendMailMessage email subject body ()
+    sendMailMessage config email subject body ()
 
 let private ReadInFile () =
     try
@@ -66,7 +66,7 @@ let private CompareDiffs (oldState : Map<int, string>) (newState : Map<int, stri
         | _ -> None
     eips |> List.map loop |> List.choose id
 
-let public Start eips period email= 
+let public Start eips period emailConfigs= 
     ReadInFile()
     let GetEipFileData = GetRequestWithAuth GithubToken
     let actions = 
@@ -80,16 +80,16 @@ let public Start eips period email=
             | [] -> ()
             | _ -> 
                 printfn "Changed EIPs : %A" (changedEips |> List.map (fun eip -> Metadata.FetchMetadata eip 0))
-                match email with
-                | Some email -> 
+                match emailConfigs with
+                | (Some email, Some config) -> 
                     changedEips 
                     |> List.map (fun eip -> eip, Metadata.FetchMetadata eip 0)
                     |> List.iter (fun (eip, eipData) -> 
                         match eipData with 
                         | Ok data -> 
-                            NotifyEmail email eip data
+                            NotifyEmail config email eip data
                         | _ -> ())
-                | None -> ()
+                | _ -> ()
                 State <- eipData
         ) period eips
     Async.RunSynchronously(actions, 0, CancellationToken.Token)

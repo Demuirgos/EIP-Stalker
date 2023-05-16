@@ -30,7 +30,7 @@ module Metadata =
                     if memo.Contains(eip) then ()
                     else
                         let eipPage = Fetch eip
-                        let dependencies = Option.map (ExtractMetadata  (depth - 1)) eipPage
+                        let dependencies = Option.map (ExtractMetadata eip (depth - 1)) eipPage
                         ignore (memo.Add(eip))
                         match dependencies with 
                         | Some deps -> 

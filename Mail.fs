@@ -3,13 +3,18 @@ module Dependency.Mail
 open System
 open System.Net.Mail
 
-let server : string = failwith "Please provide a server"
-let (sender, password, port) : (string * string * int) = failwith "Please provide a sender, passwordm port"
-let sendMailMessage email subject msg =
+type Config = {
+    Server: string
+    Sender: string
+    Password: string
+    Port: int
+}
+
+let sendMailMessage config email subject msg =
     printfn "Sending email to %s" email 
-    let client = new SmtpClient(server, port)
+    let client = new SmtpClient(config.Server, config.Port)
     client.EnableSsl <- true
-    client.Credentials <- Net.NetworkCredential(sender, password)
+    client.Credentials <- Net.NetworkCredential(config.Sender, config.Password)
     client.SendCompleted |> Observable.add(fun e -> 
         let eventMsg = e.UserState :?> MailMessage
         if e.Cancelled then
@@ -22,7 +27,16 @@ let sendMailMessage email subject msg =
 
     fun () -> 
         async {
-            let msg = new MailMessage(sender, email, subject, msg)
+            let msg = new MailMessage(config.Sender, email, subject, msg)
             msg.IsBodyHtml <- true
             do client.SendAsync(msg, msg)
         } |> Async.Start
+
+let getConfigFromFile filePath = 
+    try 
+        let fileContent = System.IO.File.ReadAllText(filePath)
+        let configs = System.Text.Json.JsonSerializer.Deserialize<Config>(fileContent)
+        Some (configs)
+    with 
+    | ex -> None
+

@@ -13,7 +13,18 @@ let rec ParseCommandlineArgs args (results : Map<string, string list>) =
     | "--monitor"::eips -> ParseCommandlineArgs (List.skipWhile isDigit eips) (results.Add("monitor", [ yield! List.takeWhile isDigit eips ]))
     | "--period"::period::t when requires "monitor" -> ParseCommandlineArgs t (results.Add("period", [ period ]))
     | "--notify"::email::t when requires "monitor" -> ParseCommandlineArgs t (results.Add("notify", [ email ]))
+    | "--config"::path::t when requires "notify" -> ParseCommandlineArgs t (results.Add("config", [ path ]))
     | _ -> results
+
+let failureHelpMessage = 
+    printfn "Usage: --query <eip> (--depth <depth>)? || --monitor <eip>+ (--period <duration>)? (--notify <email> --configs <json of corresponding format>)?"
+    printfn "{
+        Server: smtpServer
+        Sender: email
+        Port: int
+        Password: alphanum
+    }"
+    1
 
 [<EntryPoint>]
 let main args = 
@@ -29,10 +40,14 @@ let main args =
         0        
     else if parsedArgs.ContainsKey "monitor" then
         let eips = List.map int (Map.find "monitor" parsedArgs)
-        let period = Map.tryFind "period" parsedArgs |> Option.map List.tryHead |> Option.flatten |> Option.map int |> Option.defaultValue 1
+        let period = Map.tryFind "period" parsedArgs |> Option.map List.tryHead |> Option.flatten |> Option.map int |> Option.defaultValue (3600 * 24)
         let email = Map.tryFind "notify" parsedArgs |> Option.map List.tryHead |> Option.flatten
-        Monitor.Start eips period email
-        0
+        let smtpConfigsPath = Map.tryFind "config" parsedArgs |> Option.map List.tryHead |> Option.flatten
+        match smtpConfigsPath with 
+        | None -> failureHelpMessage 
+        | Some path -> 
+            let configFile = Mail.getConfigFromFile path
+            Monitor.Start eips period (email, configFile)
+            0
     else
-        printfn "Usage: --query <eip> (--depth <depth>)? || --monitor <eip>+ (--period <duration>)? (--notify <email>)?"
-        1
+        failureHelpMessage 
