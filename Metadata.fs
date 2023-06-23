@@ -89,6 +89,7 @@ module Metadata =
                 Discussion = parseList DiscussionRow 
                              |> Seq.tryHead 
                 Require = parseList RequireRow 
+                            |> Seq.map (fun s -> s.Substring(String.length "Eip-"))
                             |> Seq.map int 
                             |> List.ofSeq 
                             |> ResolveDependencies

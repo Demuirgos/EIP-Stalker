@@ -10,9 +10,10 @@ open Dependency.Mail
 open Dependency.Core
 
 let mutable State : Map<int, string> = Map.empty
+let mutable Flagged : int Set = Set.empty
+
 let CancellationToken = new CancellationTokenSource()
 let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
-let GithubToken : string= failwith "Please provide a Github token"
 
 let private GetRequestWithAuth (key:string) eip =
     async {
@@ -33,9 +34,20 @@ let private SaveInFile () =
     with
         | _ -> ()
 
-let private NotifyEmail config email eipnum (eip : Metadata) =
-    let subject = sprintf "EIP %i has been updated" eipnum
-    let body = sprintf "EIP %i has been updated :\n %A" eipnum eip
+let private NotifyEmail config email (eip : Metadata list) =
+    let subject = sprintf "Some EIPs have been updated"
+    let link = sprintf "https://eips.ethereum.org/EIPS/eip-%d"
+    let body = sprintf "
+        <table>
+          <tr>
+            <td>Number</td>
+            <td>Created</td>
+            <td>Discussion</td>
+            <td>Link</td>
+          </tr>
+          %s
+        </table>" (eip |> List.map (fun metadata -> sprintf "<tr><td>%A</td><td>%A</td><td>%A</td><td>%A</td></tr>" metadata.Number metadata.Created metadata.Discussion (link metadata.Number))
+                       |> List.fold (fun acc curr -> sprintf "%s\n%s" acc curr) System.String.Empty)
     sendMailMessage config email subject body ()
 
 let private ReadInFile () =
@@ -61,39 +73,50 @@ let private CompareDiffs (oldState : Map<int, string>) (newState : Map<int, stri
         let oldHash = Map.tryFind eip oldState
         match newHash, oldHash with
         | Some newHash, Some oldHash when newHash <> oldHash -> 
-            Some eip
-        | Some _, None | None, Some _ -> Some eip
-        | _ -> None
-    eips |> List.map loop |> List.choose id
+            true
+        | _ -> false
+    eips |> Set.filter loop
+    
+let public Watch eip = 
+    Flagged <- Set.add eip Flagged
 
-let public Start eips period emailConfigs= 
+let public Unwatch eip = 
+    Flagged <- Set.remove eip Flagged
+
+let public Start period email configs = 
     ReadInFile()
-    let GetEipFileData = GetRequestWithAuth GithubToken
+    let GetEipFileData = GetRequestWithAuth configs.GitToken
     let actions = 
         RunEvery (fun _ -> 
             let eipData = 
-                eips 
-                |> List.map (fun eip -> eip,  (GetEipFileData  eip).["sha"].AsString())
-                |> Map.ofList
-            let changedEips = CompareDiffs State eipData eips
+                Flagged 
+                |> Set.map (fun eip -> eip,  (GetEipFileData  eip).["sha"].AsString())
+                |> Map.ofSeq
+            let changedEips = CompareDiffs State eipData Flagged
+            State <- eipData
             match changedEips with 
-            | [] -> ()
+            | _ when Set.isEmpty changedEips -> ()
             | _ -> 
-                printfn "Changed EIPs : %A" (changedEips |> List.map (fun eip -> Metadata.FetchMetadata eip 0))
-                match emailConfigs with
-                | (Some email, Some config) -> 
-                    changedEips 
-                    |> List.map (fun eip -> eip, Metadata.FetchMetadata eip 0)
-                    |> List.iter (fun (eip, eipData) -> 
-                        match eipData with 
-                        | Ok data -> 
-                            NotifyEmail config email eip data
-                        | _ -> ())
+                printfn "Changed EIPs : %A" (changedEips |> Set.map (fun eip -> Metadata.FetchMetadata eip 0))
+                match email with
+                | Some email -> 
+                    let results = 
+                        let rec flatten flatres res = 
+                            match res with 
+                            | [] -> flatres
+                            | Ok h::t -> flatten (h::flatres) t 
+                            | Error e::t -> flatten flatres t 
+                        changedEips 
+                        |> Set.map (fun eip -> Metadata.FetchMetadata eip 0)
+                        |> List.ofSeq
+                        |> flatten []
+
+                    results
+                    |> NotifyEmail configs email
                 | _ -> ()
-                State <- eipData
-        ) period eips
+        ) period Flagged
     Async.RunSynchronously(actions, 0, CancellationToken.Token)
 
 let public Stop args = 
-    CancellationToken.Cancel()
     SaveInFile()
+    exit(0)

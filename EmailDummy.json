@@ -1,0 +1,8 @@
+﻿{
+  "Server": "smtp.server.com",
+  "Sender": "my.email@mail.com",
+  "Port": 000,
+  "Password": "password",
+  "EnableSsl": true,
+  "GitToken" : "github token"
+}
