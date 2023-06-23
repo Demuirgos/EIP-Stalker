@@ -4,13 +4,16 @@ A simple app that reports EIP-Metadata
 #Usage : 
  * run using : ``dotnet run ConfigArgs`` 
  * ConfigArgs ``Usage: (--period <duration>)? (--notify <email>)? --configs <ConfigJson path>``
- * ConfigJson Schema ```json {
+ * ConfigJson Schema
+   ```json
+   {
         Server: smtpServer?
         Sender: email?
         Port: int?
         Password: alphanum?
         GitToken: alphanum
-    }```
+    }
+    ```
  * Opt-in/out of an Eip watch: ``Watch|Unwatch eipNumbers+``
 ### Eip change monitor :
 ```
