@@ -4,33 +4,49 @@ open System
 open System.Threading
 open Dependency.Core
 open Dependency.Monitor
+open Dependency.Silos
 
 let rec ParseCommandlineArgs args (results : Map<string, string list>) = 
     let requires key = results.ContainsKey(key) && results.[key].Length > 0
     match args with 
-    | "--period"::period::t -> ParseCommandlineArgs t (results.Add("period", [ period ]))
-    | "--notify"::email::t -> ParseCommandlineArgs t (results.Add("notify", [ email ]))
-    | "--config"::path::t when requires "notify" -> ParseCommandlineArgs t (results.Add("config", [ path ]))
+    | "--config"::path::t -> ParseCommandlineArgs t (results.Add("config", [ path ]))
     | _ -> results
 
-let rec ReadLiveCommand (monitor:Monitor) = 
+let rec ReadLiveCommand (silos:Silos) = 
     printf "\n::> "
-    let isDigit = Seq.forall Char.IsDigit
-    let commandLine = Console.ReadLine().Split() |> List.ofArray
+    let isNumber = Seq.forall Char.IsDigit
+    let commandLine = Console.ReadLine().Split() |> List.ofArray |> List.map (fun str -> str.Trim())
 
     match commandLine with 
-    | ["watching?"]->
-        printfn "::> Currently Watching : %A" (monitor.Current())
-    | "watch"::eips ->  
-        let eips = [ yield! List.takeWhile isDigit eips ] |> List.map Int32.Parse
+    | "setup"::"--period"::period::"--notify"::[email] ->
+        let monitor = Monitor(User(email), silos.Config)
+        let userId = Silos.HashMethod email
+        do Silos.AddAccount userId monitor silos 
+        do monitor.Start (Int32.Parse period) Silos.TemporaryFilePath
+        printfn "::> User created with Id:%s" userId
+    | ["accounts?"]-> 
+        printfn "::> Current Users are:%A" silos.Monitors.Keys
+    | "remove"::[userId] -> 
+        do Silos.RemoveAccount userId silos 
+        printfn "::> User Rmoved with Id:%s" userId
+    | "watching?"::[userId]->
+        if silos.Monitors.ContainsKey userId 
+        then printfn "::> Currently Watching : %A" (silos.Monitors[userId].Current())
+        else printfn "::> User not found"
+    | "watch"::"--user"::userId::"--eips"::eips ->  
+        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
         printfn "::> Started Watching : %A" eips
-        monitor.Watch (Set.ofList eips)
-    | "unwatch"::eips -> 
-        let eips = [ yield! List.takeWhile isDigit eips ] |> List.map Int32.Parse
+        if silos.Monitors.ContainsKey userId 
+        then silos.Monitors[userId].Watch (Set.ofList eips)
+        else printfn "::> User not found"
+    | "unwatch"::"--user"::userId::"--eips"::eips -> 
+        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
         printfn "::> Stopped Watching : %A" eips
-        monitor.Unwatch (Set.ofList eips)
+        if silos.Monitors.ContainsKey userId 
+        then silos.Monitors[userId].Unwatch (Set.ofList eips)
+        else printfn "::> User not found"
     | _ -> ()
-    do ReadLiveCommand monitor
+    do ReadLiveCommand silos
 
 let failureHelpMessage = 
     printfn "Usage: Watch|Unwatch eipNumbers+"
@@ -42,27 +58,19 @@ let failureHelpMessage =
         Password: alphanum?
         GitToken: alphanum
     }"
-    1
 
 [<EntryPoint>]
 let main args = 
+    if not <| System.IO.Directory.Exists(Silos.TemporaryFilePath) then 
+        do ignore <| System.IO.Directory.CreateDirectory(Silos.TemporaryFilePath)
+
     let parsedArgs = ParseCommandlineArgs (Array.toList args) Map.empty
-    let period = Map.tryFind "period" parsedArgs |> Option.map List.tryHead |> Option.flatten |> Option.map int |> Option.defaultValue (3600 * 24)
-    let email = Map.tryFind "notify" parsedArgs |> Option.map List.tryHead |> Option.flatten
     let smtpConfigsPath = Map.tryFind "config" parsedArgs |> Option.map List.tryHead |> Option.flatten
     match smtpConfigsPath with 
     | None -> failureHelpMessage 
     | Some path -> 
-        let configFile = Mail.getConfigFromFile path
-        let monitor = Monitor(email, configFile.Value)
-        let stdinThread () = 
-            let thread = new Thread(fun () -> 
-                try ReadLiveCommand monitor
-                with 
-                | :? System.Exception -> printf "Stopped reading commands\n::> "
-            )
-            thread .Start()
-
-        Console.CancelKeyPress.Add(monitor.Stop)
-        monitor.Start period [stdinThread]
-        0
+        let config = Mail.getConfigFromFile path
+        let silos = Silos.ReadInFile config.Value
+        Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos)
+        ReadLiveCommand silos
+    0

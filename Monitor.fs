@@ -11,18 +11,31 @@ open Dependency.Core
 
 open System
 open System.Collections.Generic
+open System.Collections.Concurrent
+
+type User = User of email:string
+    with member self.ToString = 
+        match self with 
+        | User email -> email
 
 [<Class>]
-type Monitor(recepient: string option, config: Config) = 
-    let mutable State : Dictionary<int, string> = new Dictionary<int, string>()
+type Monitor(recepient: User, config: Config) = 
+    let mutable State : ConcurrentDictionary<int, string> = ConcurrentDictionary<_, _>()
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
-    let mutable Email : String option = recepient
+    let mutable Email : User = recepient
 
     let CancellationToken = new CancellationTokenSource()
-    let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
+    let TemporaryFilePath = sprintf "%s.json" (Email.ToString)
+
+    new(path: string, filename:string, config:Config) as self= 
+        Monitor(User(filename), config)
+        then self.ReadInFile path
+             self.Start 10 (Path.GetDirectoryName(path))
+
 
     member public _.Current() = (State, Flagged)
+    member public _.Path() = TemporaryFilePath
 
     member private _.GetRequestWithAuth (key:string) eip =
         async {
@@ -35,19 +48,18 @@ type Monitor(recepient: string option, config: Config) =
         } |> Async.RunSynchronously
           |> JsonValue.Parse
 
-    member private _.SaveInFile () =
+    member public _.SaveInFile pathPrefix =
         try
             printf "Save : %A\n::> " State
             let json = JsonSerializer.Serialize(State)
-            File.WriteAllText(TemporaryFilePath, json)
+            File.WriteAllText(Path.Combine(pathPrefix,TemporaryFilePath), json)
         with
-            | _ -> ()
+            | e -> printf "%s" e.Message
 
-
-    member private self.ReadInFile () =
+    member private self.ReadInFile path =
         try
-            let json = File.ReadAllText(TemporaryFilePath)
-            State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
+            let json = File.ReadAllText(path)
+            State <- JsonSerializer.Deserialize<ConcurrentDictionary<int, string>>(json)
             self.HandleEips (Set.ofSeq State.Keys)
             self.Watch (Set.ofSeq State.Keys) 
             printf "Restore : %A\n::> " State
@@ -63,7 +75,7 @@ type Monitor(recepient: string option, config: Config) =
             }
         loop()
 
-    member private _.CompareDiffs (oldState : Dictionary<int, string>) (newState : Dictionary<int, string>) eips =
+    member private _.CompareDiffs (oldState : ConcurrentDictionary<int, string>) (newState : ConcurrentDictionary<int, string>) eips =
         let loop eip = 
             let newHash = newState.ContainsKey eip
             let oldHash = oldState.ContainsKey eip
@@ -82,9 +94,9 @@ type Monitor(recepient: string option, config: Config) =
         Flagged <- Set.difference Flagged eips 
         eips |> Set.iter (fun eip -> ignore <| State.Remove(eip))
     
-    member private self.GetEipMetadata eips : Dictionary<int, string> =
+    member private self.GetEipMetadata eips : ConcurrentDictionary<int, string> =
         let GetEipFileData = self.GetRequestWithAuth Config.GitToken
-        let newState = new Dictionary<int, string>()
+        let newState = new ConcurrentDictionary<int, string>()
         do eips |> Set.iter (fun eip -> newState[eip] <- (GetEipFileData  eip).["sha"].AsString())
         newState
 
@@ -97,29 +109,31 @@ type Monitor(recepient: string option, config: Config) =
         | _ -> 
             let metadata = changedEips |> Set.map (fun eip -> Metadata.FetchMetadata eip 0)
             printf "Changed EIPs : %A\n::> " (metadata)
-            match Email with
-            | Some email -> 
-                let results = 
-                    let rec flatten flatres res = 
-                        match res with 
-                        | [] -> flatres
-                        | Ok h::t -> flatten (h::flatres) t 
-                        | Error e::t -> flatten flatres t 
+            let results = 
+                let rec flatten flatres res = 
+                    match res with 
+                    | [] -> flatres
+                    | Ok h::t -> flatten (h::flatres) t 
+                    | Error e::t -> flatten flatres t 
                         
-                    metadata
-                    |> List.ofSeq
-                    |> flatten []
+                metadata
+                |> List.ofSeq
+                |> flatten []
 
+
+            match Email with
+            | User(email) -> 
                 results
                 |> Mail.NotifyEmail Config email
-            | _ -> ()
 
-    member public self.Start period hooks= 
-        self.ReadInFile()
-        hooks |> List.iter (fun hook -> hook())
-        let actions = self.RunEvery (self.HandleEips) period Flagged
-        Async.RunSynchronously(actions, 0, CancellationToken.Token)
-
-    member public self.Stop args = 
-        self.SaveInFile()
-        exit(0)
+    member public self.Start period silosPath= 
+        let thread = 
+            new Thread(fun () -> 
+                try 
+                    self.ReadInFile silosPath
+                    let actions = self.RunEvery (self.HandleEips) period Flagged
+                    Async.RunSynchronously(actions, 0, CancellationToken.Token)
+                with 
+                | :? System.Exception -> printf "Stopped reading commands\n::> "
+            )
+        thread.Start()
