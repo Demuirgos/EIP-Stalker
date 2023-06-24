@@ -9,114 +9,117 @@ open System.Threading
 open Dependency.Mail
 open Dependency.Core
 
-let mutable State : Map<int, string> = Map.empty
-let mutable Flagged : int Set = Set.empty
+open System
+open System.Collections.Generic
 
-let CancellationToken = new CancellationTokenSource()
-let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
+[<Class>]
+type Monitor(recepient: string option, config: Config) = 
+    let mutable State : Dictionary<int, string> = new Dictionary<int, string>()
+    let mutable Flagged : int Set = Set.empty
+    let mutable Config : Config = config
+    let mutable Email : String option = recepient
 
-let private GetRequestWithAuth (key:string) eip =
-    async {
-        let client = new HttpClient()
-        client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json")
-        client.DefaultRequestHeaders.Authorization <- AuthenticationHeaderValue("token", key)
-        client.DefaultRequestHeaders.UserAgent.Add(ProductInfoHeaderValue("FSharp", "6.0"))
-        let! response =  client.GetAsync(sprintf "https://api.github.com/repos/ethereum/EIPs/contents/EIPS/eip-%i.md" eip) |> Async.AwaitTask
-        return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
-    } |> Async.RunSynchronously
-    |> JsonValue.Parse
+    let CancellationToken = new CancellationTokenSource()
+    let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
 
-let private SaveInFile () =
-    try
-        printfn "Save : %A" State
-        let json = JsonSerializer.Serialize(State)
-        File.WriteAllText(TemporaryFilePath, json)
-    with
-        | _ -> ()
+    member public _.Current = (State, Flagged)
 
-let private NotifyEmail config email (eip : Metadata list) =
-    let subject = sprintf "Some EIPs have been updated"
-    let link = sprintf "https://eips.ethereum.org/EIPS/eip-%d"
-    let body = sprintf "
-        <table>
-          <tr>
-            <td>Number</td>
-            <td>Created</td>
-            <td>Discussion</td>
-            <td>Link</td>
-          </tr>
-          %s
-        </table>" (eip |> List.map (fun metadata -> sprintf "<tr><td>%A</td><td>%A</td><td>%A</td><td>%A</td></tr>" metadata.Number metadata.Created metadata.Discussion (link metadata.Number))
-                       |> List.fold (fun acc curr -> sprintf "%s\n%s" acc curr) System.String.Empty)
-    sendMailMessage config email subject body ()
-
-let private ReadInFile () =
-    try
-        let json = File.ReadAllText(TemporaryFilePath)
-        State <- JsonSerializer.Deserialize<Map<int, string>>(json)
-        printfn "Restore : %A" State
-    with
-        | _ -> ()
-
-let private RunEvery action (period : int) args= 
-    let rec loop () =
+    member private _.GetRequestWithAuth (key:string) eip =
         async {
-            let _ = action args
-            do! Async.Sleep (period * 1000)
-            do! loop()
-        }
-    loop()
+            let client = new HttpClient()
+            client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json")
+            client.DefaultRequestHeaders.Authorization <- AuthenticationHeaderValue("token", key)
+            client.DefaultRequestHeaders.UserAgent.Add(ProductInfoHeaderValue("FSharp", "6.0"))
+            let! response =  client.GetAsync(sprintf "https://api.github.com/repos/ethereum/EIPs/contents/EIPS/eip-%i.md" eip) |> Async.AwaitTask
+            return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+        } |> Async.RunSynchronously
+          |> JsonValue.Parse
 
-let private CompareDiffs (oldState : Map<int, string>) (newState : Map<int, string>) eips =
-    let loop eip = 
-        let newHash = Map.tryFind eip newState
-        let oldHash = Map.tryFind eip oldState
-        match newHash, oldHash with
-        | Some newHash, Some oldHash when newHash <> oldHash -> 
-            true
-        | _ -> false
-    eips |> Set.filter loop
+    member private _.SaveInFile () =
+        try
+            printf "Save : %A\n::> " State
+            let json = JsonSerializer.Serialize(State)
+            File.WriteAllText(TemporaryFilePath, json)
+        with
+            | _ -> ()
+
+
+    member private self.ReadInFile () =
+        try
+            let json = File.ReadAllText(TemporaryFilePath)
+            State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
+            self.Watch (Set.ofSeq State.Keys) 
+            self.HandleEips (Set.ofSeq State.Keys)
+            printf "Restore : %A\n::> " State
+        with
+            | _ -> ()
+
+    member private _.RunEvery action (period : int) args= 
+        let rec loop () =
+            async {
+                let _ = action args
+                do! Async.Sleep (period * 1000)
+                do! loop()
+            }
+        loop()
+
+    member private _.CompareDiffs (oldState : Dictionary<int, string>) (newState : Dictionary<int, string>) eips =
+        let loop eip = 
+            let newHash = newState.ContainsKey eip
+            let oldHash = oldState.ContainsKey eip
+            if oldHash = newHash && oldHash = true 
+            then oldState[eip] <> newState[eip]
+            else false
+        eips |> Set.filter loop
+
+    member public self.Watch (eips:int Set) = 
+        Flagged <- Set.union eips Flagged
+        let newStateSegment = self.GetEipMetadata eips
+        for kvp in newStateSegment do 
+            State[kvp.Key] <- kvp.Value
+
+    member public _.Unwatch eips = 
+        Flagged <- Set.difference Flagged eips 
+        eips |> Set.iter (fun eip -> ignore <| State.Remove(eip))
     
-let public Watch eip = 
-    Flagged <- Set.add eip Flagged
+    member private self.GetEipMetadata eips : Dictionary<int, string> =
+        let GetEipFileData = self.GetRequestWithAuth Config.GitToken
+        let newState = new Dictionary<int, string>()
+        do eips |> Set.iter (fun eip -> newState[eip] <- (GetEipFileData  eip).["sha"].AsString())
+        newState
 
-let public Unwatch eip = 
-    Flagged <- Set.remove eip Flagged
+    member private self.HandleEips eips = 
+        let eipData = self.GetEipMetadata eips 
+        let changedEips = self.CompareDiffs State eipData eips
+        State <- eipData
+        match changedEips with 
+        | _ when Set.isEmpty changedEips -> ()
+        | _ -> 
+            let metadata = changedEips |> Set.map (fun eip -> Metadata.FetchMetadata eip 0)
+            printf "Changed EIPs : %A\n::> " (metadata)
+            match Email with
+            | Some email -> 
+                let results = 
+                    let rec flatten flatres res = 
+                        match res with 
+                        | [] -> flatres
+                        | Ok h::t -> flatten (h::flatres) t 
+                        | Error e::t -> flatten flatres t 
+                        
+                    metadata
+                    |> List.ofSeq
+                    |> flatten []
 
-let public Start period email configs = 
-    ReadInFile()
-    let GetEipFileData = GetRequestWithAuth configs.GitToken
-    let actions = 
-        RunEvery (fun _ -> 
-            let eipData = 
-                Flagged 
-                |> Set.map (fun eip -> eip,  (GetEipFileData  eip).["sha"].AsString())
-                |> Map.ofSeq
-            let changedEips = CompareDiffs State eipData Flagged
-            State <- eipData
-            match changedEips with 
-            | _ when Set.isEmpty changedEips -> ()
-            | _ -> 
-                printfn "Changed EIPs : %A" (changedEips |> Set.map (fun eip -> Metadata.FetchMetadata eip 0))
-                match email with
-                | Some email -> 
-                    let results = 
-                        let rec flatten flatres res = 
-                            match res with 
-                            | [] -> flatres
-                            | Ok h::t -> flatten (h::flatres) t 
-                            | Error e::t -> flatten flatres t 
-                        changedEips 
-                        |> Set.map (fun eip -> Metadata.FetchMetadata eip 0)
-                        |> List.ofSeq
-                        |> flatten []
+                results
+                |> Mail.NotifyEmail Config email
+            | _ -> ()
 
-                    results
-                    |> NotifyEmail configs email
-                | _ -> ()
-        ) period Flagged
-    Async.RunSynchronously(actions, 0, CancellationToken.Token)
+    member public self.Start period hooks= 
+        self.ReadInFile()
+        hooks |> List.iter (fun hook -> hook())
+        let actions = self.RunEvery (self.HandleEips) period Flagged
+        Async.RunSynchronously(actions, 0, CancellationToken.Token)
 
-let public Stop args = 
-    SaveInFile()
-    exit(0)
+    member public self.Stop args = 
+        self.SaveInFile()
+        exit(0)

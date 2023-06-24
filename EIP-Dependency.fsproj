@@ -6,8 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="EmailDummy.json" />
-    <Compile Include="Mail.fs" />
     <Compile Include="Metadata.fs" />
+    <Compile Include="Mail.fs" />
     <Compile Include="Monitor.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -1,8 +1,9 @@
 ﻿module Dependency.Resolver
 
 open System
-open Dependency.Core
 open System.Threading
+open Dependency.Core
+open Dependency.Monitor
 
 let rec ParseCommandlineArgs args (results : Map<string, string list>) = 
     let requires key = results.ContainsKey(key) && results.[key].Length > 0
@@ -12,20 +13,24 @@ let rec ParseCommandlineArgs args (results : Map<string, string list>) =
     | "--config"::path::t when requires "notify" -> ParseCommandlineArgs t (results.Add("config", [ path ]))
     | _ -> results
 
-let rec ReadLiveCommand ()= 
-    printf "\n::>"
+let rec ReadLiveCommand (monitor:Monitor) = 
+    printf "\n::> "
     let isDigit = Seq.forall Char.IsDigit
     let commandLine = Console.ReadLine().Split() |> List.ofArray
+
     match commandLine with 
+    | ["watching?"]->
+        printfn "::> Currently Watching : %A" monitor.Current 
     | "watch"::eips ->  
         let eips = [ yield! List.takeWhile isDigit eips ] |> List.map Int32.Parse
-        printfn "Started Watching : %A" eips
-        eips |> List.iter Monitor.Watch 
+        printfn "::> Started Watching : %A" eips
+        monitor.Watch (Set.ofList eips)
     | "unwatch"::eips -> 
         let eips = [ yield! List.takeWhile isDigit eips ] |> List.map Int32.Parse
-        printfn "Stopped Watching : %A" eips
-        eips |> List.iter Monitor.Unwatch
-    do ReadLiveCommand ()
+        printfn "::> Stopped Watching : %A" eips
+        monitor.Unwatch (Set.ofList eips)
+    | _ -> ()
+    do ReadLiveCommand monitor
 
 let failureHelpMessage = 
     printfn "Usage: Watch|Unwatch eipNumbers+"
@@ -41,25 +46,23 @@ let failureHelpMessage =
 
 [<EntryPoint>]
 let main args = 
-        
     let parsedArgs = ParseCommandlineArgs (Array.toList args) Map.empty
-    printf "%A" parsedArgs
     let period = Map.tryFind "period" parsedArgs |> Option.map List.tryHead |> Option.flatten |> Option.map int |> Option.defaultValue (3600 * 24)
     let email = Map.tryFind "notify" parsedArgs |> Option.map List.tryHead |> Option.flatten
     let smtpConfigsPath = Map.tryFind "config" parsedArgs |> Option.map List.tryHead |> Option.flatten
     match smtpConfigsPath with 
     | None -> failureHelpMessage 
     | Some path -> 
-        let thread = new Thread(fun () -> 
-            try ReadLiveCommand()
-            with 
-            | :? System.Exception -> printfn "Stopped reading commands"
-        )
-        thread .Start()
-        Console.CancelKeyPress.Add(fun _ -> 
-            thread.Interrupt()
-            Monitor.Stop()
-        )
         let configFile = Mail.getConfigFromFile path
-        Monitor.Start period email configFile.Value
+        let monitor = Monitor(email, configFile.Value)
+        let stdinThread () = 
+            let thread = new Thread(fun () -> 
+                try ReadLiveCommand monitor
+                with 
+                | :? System.Exception -> printf "Stopped reading commands\n::> "
+            )
+            thread .Start()
+
+        Console.CancelKeyPress.Add(monitor.Stop)
+        monitor.Start period [stdinThread]
         0
