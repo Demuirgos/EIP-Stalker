@@ -20,7 +20,7 @@ type User = User of email:string
 
 [<Class>]
 type Monitor(recepient: User, config: Config) = 
-    let mutable State : ConcurrentDictionary<int, string> = ConcurrentDictionary<_, _>()
+    let mutable State : Dictionary<int, string> = Dictionary<_, _>()
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
     let mutable Email : User = recepient
@@ -59,10 +59,10 @@ type Monitor(recepient: User, config: Config) =
     member private self.ReadInFile path =
         try
             let json = File.ReadAllText(path)
-            State <- JsonSerializer.Deserialize<ConcurrentDictionary<int, string>>(json)
+            State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
             self.HandleEips (Set.ofSeq State.Keys)
             self.Watch (Set.ofSeq State.Keys) 
-            printf "Restore : %A\n::> " State
+            printfn "::> Restore : %A" State
         with
             | _ -> ()
 
@@ -75,13 +75,21 @@ type Monitor(recepient: User, config: Config) =
             }
         loop()
 
-    member private _.CompareDiffs (oldState : ConcurrentDictionary<int, string>) (newState : ConcurrentDictionary<int, string>) eips =
+    member private _.CompareDiffs (oldState : Dictionary<_, _>) (newState : Dictionary<_, _>) eips =
         let loop eip = 
-            let newHash = newState.ContainsKey eip
-            let oldHash = oldState.ContainsKey eip
-            if oldHash = newHash && oldHash = true 
-            then oldState[eip] <> newState[eip]
-            else false
+            let newHashExists = newState.ContainsKey eip
+            let oldHashExists = oldState.ContainsKey eip
+            if newHashExists = oldHashExists && oldHashExists = true 
+            then 
+                let mismatch = oldState[eip] <> newState[eip]
+                oldState[eip] <- newState[eip]
+                mismatch
+            else 
+                if newHashExists then 
+                    oldState[eip] <- newState[eip]
+                false
+
+                
         eips |> Set.filter loop
 
     member public self.Watch (eips:int Set) = 
@@ -94,16 +102,15 @@ type Monitor(recepient: User, config: Config) =
         Flagged <- Set.difference Flagged eips 
         eips |> Set.iter (fun eip -> ignore <| State.Remove(eip))
     
-    member private self.GetEipMetadata eips : ConcurrentDictionary<int, string> =
+    member private self.GetEipMetadata eips : Dictionary<_, _> =
         let GetEipFileData = self.GetRequestWithAuth Config.GitToken
-        let newState = new ConcurrentDictionary<int, string>()
+        let newState = new Dictionary<int, string>()
         do eips |> Set.iter (fun eip -> newState[eip] <- (GetEipFileData  eip).["sha"].AsString())
         newState
 
     member private self.HandleEips eips = 
         let eipData = self.GetEipMetadata eips 
         let changedEips = self.CompareDiffs State eipData eips
-        State <- eipData
         match changedEips with 
         | _ when Set.isEmpty changedEips -> ()
         | _ -> 

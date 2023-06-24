@@ -71,6 +71,6 @@ let main args =
     | Some path -> 
         let config = Mail.getConfigFromFile path
         let silos = Silos.ReadInFile config.Value
-        Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos)
+        Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos; exit 0)
         ReadLiveCommand silos
     0
