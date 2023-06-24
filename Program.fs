@@ -20,7 +20,7 @@ let rec ReadLiveCommand (monitor:Monitor) =
 
     match commandLine with 
     | ["watching?"]->
-        printfn "::> Currently Watching : %A" monitor.Current 
+        printfn "::> Currently Watching : %A" (monitor.Current())
     | "watch"::eips ->  
         let eips = [ yield! List.takeWhile isDigit eips ] |> List.map Int32.Parse
         printfn "::> Started Watching : %A" eips

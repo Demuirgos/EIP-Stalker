@@ -22,7 +22,7 @@ type Monitor(recepient: string option, config: Config) =
     let CancellationToken = new CancellationTokenSource()
     let TemporaryFilePath = Path.Combine(System.Environment.CurrentDirectory, "eips.json")
 
-    member public _.Current = (State, Flagged)
+    member public _.Current() = (State, Flagged)
 
     member private _.GetRequestWithAuth (key:string) eip =
         async {
@@ -48,8 +48,8 @@ type Monitor(recepient: string option, config: Config) =
         try
             let json = File.ReadAllText(TemporaryFilePath)
             State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
-            self.Watch (Set.ofSeq State.Keys) 
             self.HandleEips (Set.ofSeq State.Keys)
+            self.Watch (Set.ofSeq State.Keys) 
             printf "Restore : %A\n::> " State
         with
             | _ -> ()
