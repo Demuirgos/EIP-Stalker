@@ -6,30 +6,33 @@ open System.Net.Http
 open System.Text.Json
 open System.Net.Http.Headers
 open System.Threading
-open Dependency.Mail
+open Dependency.Config
 open Dependency.Core
 
 open System
 open System.Collections.Generic
 open System.Collections.Concurrent
 
-type User = User of email:string
+type User = 
+    | User of userId:uint64
+    | Email of email:string
     with member self.ToString = 
         match self with 
-        | User email -> email
+        | User userId -> userId.ToString()
+        | Email email -> email
 
 [<Class>]
 type Monitor(recepient: User, config: Config) = 
     let mutable State : Dictionary<int, string> = Dictionary<_, _>()
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
-    let mutable Email : User = recepient
+    let mutable UserId : User = recepient
 
     let CancellationToken = new CancellationTokenSource()
-    let TemporaryFilePath = sprintf "%s.json" (Email.ToString)
+    let TemporaryFilePath = sprintf "%s.json" (UserId.ToString)
 
     new(path: string, filename:string, config:Config) as self= 
-        Monitor(User(filename), config)
+        Monitor(User(UInt64.Parse filename), config)
         then self.ReadInFile path
              self.Start 10 (Path.GetDirectoryName(path))
 
@@ -108,7 +111,7 @@ type Monitor(recepient: User, config: Config) =
         do eips |> Set.iter (fun eip -> newState[eip] <- (GetEipFileData  eip).["sha"].AsString())
         newState
 
-    member private self.HandleEips eips = 
+    member private self.HandleEips eips= 
         let eipData = self.GetEipMetadata eips 
         let changedEips = self.CompareDiffs State eipData eips
         match changedEips with 
@@ -128,11 +131,15 @@ type Monitor(recepient: User, config: Config) =
                 |> flatten []
 
 
-            match Email with
-            | User(email) -> 
+            match UserId with
+            | User(user) -> 
+                results
+                |> Discord.Metadata
+                |> Dependency.Discord.SendMessageAsync Config (Some user)
+                |> Async.StartImmediate
+            | Email(email) -> 
                 results
                 |> Mail.NotifyEmail Config email
-
     member public self.Start period silosPath= 
         let thread = 
             new Thread(fun () -> 

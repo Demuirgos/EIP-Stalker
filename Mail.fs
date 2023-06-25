@@ -3,15 +3,7 @@ module Dependency.Mail
 open System
 open MailKit.Net.Smtp;
 open Dependency.Core
-
-type Config = {
-    Server: string
-    Sender: string
-    Password: string
-    Port: int
-    EnableSsl : bool
-    GitToken: string
-}
+open Dependency.Config
 
 let private sendMailMessage config email subject msg =
     printf "Sending email to %s\n::> " email 

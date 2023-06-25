@@ -1,11 +1,11 @@
 ﻿module Dependency.Silos
     open Dependency.Monitor
     open System.IO
-    open Dependency.Mail 
     open System.Collections.Generic
     open System.Security.Cryptography
     open System
     open System.Text
+    open Dependency.Config
 
     type Silos = {
         Monitors: Dictionary<string, Monitor>

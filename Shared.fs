@@ -3,45 +3,42 @@
 open System
 open System.Threading
 open Dependency.Core
-open Dependency.Monitor
-open Dependency.Silos
 
-let rec HandleMessage (silos:Silos) (msgBody:string) = 
-    let isNumber = Seq.forall Char.IsDigit
+type 't Context= Context of 't * msgBody:string
+
+type 't Handler = {
+    Setup : 't Context -> int -> string -> unit
+    Accounts : 't Context -> unit
+    Remove : 't Context -> string -> unit
+    Watching: 't Context -> string -> unit
+    Watch: 't Context -> string -> string list -> unit
+    Unwatch: 't Context -> string -> string list -> unit
+}
+
+let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
+
+let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handler:'a Handler)= 
+
+    let userId = sender.ToString()
 
     let commandLine = msgBody.Split() |> List.ofArray |> List.map (fun str -> str.Trim())
     match commandLine with 
     | "setup"::"--period"::period::"--notify"::[email] ->
-        let monitor = Monitor(User(email), silos.Config)
-        let userId = Silos.HashMethod email
-        do Silos.AddAccount userId monitor silos 
-        do monitor.Start (Int32.Parse period) Silos.TemporaryFilePath
-        printfn "::> User created with Id:%s" userId
+        handler.Setup (Context (preContext, msgBody)) (Int32.Parse period) userId
     | ["accounts?"]-> 
-        printfn "::> Current Users are:%A" silos.Monitors.Keys
-    | "remove"::[userId] -> 
-        do Silos.RemoveAccount userId silos 
-        printfn "::> User Rmoved with Id:%s" userId
-    | "watching?"::[userId]->
-        if silos.Monitors.ContainsKey userId 
-        then printfn "::> Currently Watching : %A" (silos.Monitors[userId].Current())
-        else printfn "::> User not found"
-    | "watch"::"--user"::userId::"--eips"::eips ->  
-        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-        printfn "::> Started Watching : %A" eips
-        if silos.Monitors.ContainsKey userId 
-        then silos.Monitors[userId].Watch (Set.ofList eips)
-        else printfn "::> User not found"
-    | "unwatch"::"--user"::userId::"--eips"::eips -> 
-        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-        printfn "::> Stopped Watching : %A" eips
-        if silos.Monitors.ContainsKey userId 
-        then silos.Monitors[userId].Unwatch (Set.ofList eips)
-        else printfn "::> User not found"
+        handler.Accounts (Context (preContext, msgBody)) 
+    | ["remove"]-> 
+        handler.Remove (Context (preContext, msgBody)) userId
+    | ["watching?"]->
+        handler.Watching (Context (preContext, msgBody)) userId
+    | "watch"::eips ->  
+        handler.Watch (Context (preContext, msgBody)) userId eips
+    | "unwatch"::eips -> 
+        handler.Unwatch (Context (preContext, msgBody)) userId eips
     | _ -> ()
 
 
-let rec ReadLiveCommand (silos:Silos)= 
+let rec ReadLiveCommand preCtx handler= 
     printf "\n::> "
-    HandleMessage silos (Console.ReadLine())
-    do ReadLiveCommand silos
+    HandleMessage preCtx (UInt64.MinValue, Console.ReadLine()) handler
+    do ReadLiveCommand preCtx

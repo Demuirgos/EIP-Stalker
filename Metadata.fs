@@ -13,6 +13,7 @@ type Metadata = {
     Require : int list option
     Discussion : string option
 }
+    with member self.Link = sprintf "https://eips.ethereum.org/EIPS/eip-%d" self.Number
 
 module Metadata = 
     let private Fetch eipNum = 
