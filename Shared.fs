@@ -1,4 +1,4 @@
-﻿module Dependency.Resolver
+﻿module Dependency.Shared
 
 open System
 open System.Threading
@@ -6,17 +6,10 @@ open Dependency.Core
 open Dependency.Monitor
 open Dependency.Silos
 
-let rec ParseCommandlineArgs args (results : Map<string, string list>) = 
-    let requires key = results.ContainsKey(key) && results.[key].Length > 0
-    match args with 
-    | "--config"::path::t -> ParseCommandlineArgs t (results.Add("config", [ path ]))
-    | _ -> results
-
-let rec ReadLiveCommand (silos:Silos) = 
-    printf "\n::> "
+let rec HandleMessage (silos:Silos) (msgBody:string) = 
     let isNumber = Seq.forall Char.IsDigit
-    let commandLine = Console.ReadLine().Split() |> List.ofArray |> List.map (fun str -> str.Trim())
 
+    let commandLine = msgBody.Split() |> List.ofArray |> List.map (fun str -> str.Trim())
     match commandLine with 
     | "setup"::"--period"::period::"--notify"::[email] ->
         let monitor = Monitor(User(email), silos.Config)
@@ -46,31 +39,9 @@ let rec ReadLiveCommand (silos:Silos) =
         then silos.Monitors[userId].Unwatch (Set.ofList eips)
         else printfn "::> User not found"
     | _ -> ()
+
+
+let rec ReadLiveCommand (silos:Silos)= 
+    printf "\n::> "
+    HandleMessage silos (Console.ReadLine())
     do ReadLiveCommand silos
-
-let failureHelpMessage = 
-    printfn "Usage: Watch|Unwatch eipNumbers+"
-    printfn "Usage: (--period <duration>)? --notify <email> --configs <json path>"
-    printfn "json schema {
-        Server: smtpServer?
-        Sender: email?
-        Port: int?
-        Password: alphanum?
-        GitToken: alphanum
-    }"
-
-[<EntryPoint>]
-let main args = 
-    if not <| System.IO.Directory.Exists(Silos.TemporaryFilePath) then 
-        do ignore <| System.IO.Directory.CreateDirectory(Silos.TemporaryFilePath)
-
-    let parsedArgs = ParseCommandlineArgs (Array.toList args) Map.empty
-    let smtpConfigsPath = Map.tryFind "config" parsedArgs |> Option.map List.tryHead |> Option.flatten
-    match smtpConfigsPath with 
-    | None -> failureHelpMessage 
-    | Some path -> 
-        let config = Mail.getConfigFromFile path
-        let silos = Silos.ReadInFile config.Value
-        Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos; exit 0)
-        ReadLiveCommand silos
-    0
