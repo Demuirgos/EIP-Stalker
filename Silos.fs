@@ -50,7 +50,7 @@
             let kvp = List.map (fun (path:string) -> 
                             let filename = Path.GetFileNameWithoutExtension path
                             let monitor = Monitor(path, filename, Config)
-                            (HashMethod filename), monitor
+                            filename, monitor
                         ) files
             {
                 Monitors= Dictionary<_, _>(dict kvp)
