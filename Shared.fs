@@ -23,8 +23,12 @@ let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handl
 
     let commandLine = msgBody.Split() |> List.ofArray |> List.map (fun str -> str.Trim())
     match commandLine with 
-    | "setup"::"--period"::period::"--notify"::[email] ->
-        handler.Setup (Context (preContext, msgBody)) (Int32.Parse period) userId
+    | "setup"::"--period"::period::rest -> 
+        let user = 
+            match rest with 
+            | "--notify"::[email] -> email
+            | [] -> userId
+        handler.Setup (Context (preContext, msgBody)) (Int32.Parse period) user
     | ["accounts?"]-> 
         handler.Accounts (Context (preContext, msgBody)) 
     | ["remove"]-> 

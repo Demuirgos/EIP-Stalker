@@ -69,10 +69,10 @@ type Monitor(recepient: User, config: Config) =
         with
             | _ -> ()
 
-    member private _.RunEvery action (period : int) args= 
+    member private _.RunEvery action (period : int)= 
         let rec loop () =
             async {
-                let _ = action args
+                let _ = action Flagged
                 do! Async.Sleep (period * 1000)
                 do! loop()
             }
@@ -145,7 +145,7 @@ type Monitor(recepient: User, config: Config) =
             new Thread(fun () -> 
                 try 
                     self.ReadInFile silosPath
-                    let actions = self.RunEvery (self.HandleEips) period Flagged
+                    let actions = self.RunEvery (self.HandleEips) period
                     Async.RunSynchronously(actions, 0, CancellationToken.Token)
                 with 
                 | :? System.Exception -> printf "Stopped reading commands\n::> "

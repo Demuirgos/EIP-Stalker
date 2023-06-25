@@ -66,41 +66,65 @@ let ConsoleHandler = {
 
 let DiscordHandler = {
     Setup = function
-        | Context((client, silos), _) -> 
+        | Context((config, silos), _) -> 
             fun period userId ->
                 let monitor = Monitor(User(UInt64.Parse userId), silos.Config)
                 do Silos.AddAccount userId monitor silos 
                 do monitor.Start period Silos.TemporaryFilePath
+                let message = sprintf "User Added"
+                Discord.SendMessageAsync config None (Discord.Text message)
+                |> Async.RunSynchronously
     Accounts =  function
-        | Context((client, silos), _) -> 
-            printfn "::> Current Users are:%A" silos.Monitors.Keys
+        | Context((config, silos), _) -> 
+            let message = sprintf "::> Current Users are:%A" silos.Monitors.Keys
+            Discord.SendMessageAsync config None (Discord.Text message)
+            |> Async.RunSynchronously
     Remove =    function
-        | Context((client, silos), _) -> 
+        | Context((config, silos), _) -> 
             fun userId -> 
                 do Silos.RemoveAccount userId silos 
-                printfn "::> User Rmoved with Id:%s" userId
+                let message = sprintf "User Rmoved with Id:%s" userId
+                Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                |> Async.RunSynchronously
     Watching =    function
-        | Context((client, silos), _) -> 
+        | Context((config, silos), _) -> 
             fun userId -> 
-                if silos.Monitors.ContainsKey userId 
-                then printfn "::> Currently Watching : %A" (silos.Monitors[userId].Current())
-                else printfn "::> User not found"
+                let message = 
+                    if silos.Monitors.ContainsKey userId 
+                    then sprintf "Currently Watching : %A" (silos.Monitors[userId].Current())
+                    else sprintf "User not found"
+                
+                Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                |> Async.RunSynchronously
     Watch =    function
-        | Context((client, silos), _) -> 
+        | Context((config, silos), _) -> 
             fun userId eips -> 
                 let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                printfn "::> Started Watching : %A" eips
-                if silos.Monitors.ContainsKey userId 
-                then silos.Monitors[userId].Watch (Set.ofList eips)
-                else printfn "::> User not found"
+                let message = 
+                    if silos.Monitors.ContainsKey userId 
+                    then 
+                        silos.Monitors[userId].Watch (Set.ofList eips)
+                        sprintf "Started Watching : %A" eips
+                    else 
+                        sprintf "User not found"
+                
+                
+                Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                |> Async.RunSynchronously
     Unwatch =    function
-        | Context((client, silos), _) -> 
+        | Context((config, silos), _) -> 
             fun userId eips -> 
                 let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                printfn "::> Stopped Watching : %A" eips
-                if silos.Monitors.ContainsKey userId 
-                then silos.Monitors[userId].Unwatch (Set.ofList eips)
-                else printfn "::> User not found"
+                let message = 
+                    if silos.Monitors.ContainsKey userId 
+                    then 
+                        silos.Monitors[userId].Unwatch (Set.ofList eips)
+                        sprintf "::> Stopped Watching : %A" eips
+                    else 
+                        sprintf "::> User not found"
+                
+                Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                |> Async.RunSynchronously
 }
 
 [<EntryPoint>]
@@ -116,5 +140,6 @@ let main args =
         let config = Config.getConfigFromFile path
         let silos = Silos.ReadInFile config.Value
         Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos; exit 0)
-        do Discord.Run config.Value (Discord.client, silos) DiscordHandler
+        do Discord.Run config.Value (config.Value, silos) DiscordHandler
+            |> Async.RunSynchronously
     0

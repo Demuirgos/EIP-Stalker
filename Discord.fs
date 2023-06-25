@@ -11,22 +11,31 @@ type Message =
     | Metadata of Core.Metadata list 
     | Text of string
 
-let mutable client : DiscordSocketClient = DiscordSocketClient()
+let mutable client : DiscordSocketClient = 
+    let privilage = GatewayIntents.AllUnprivileged ||| GatewayIntents.MessageContent
+    let discordSocketConfig = new DiscordSocketConfig()
+    discordSocketConfig.GatewayIntents <- privilage
+    DiscordSocketClient(discordSocketConfig)
 
 let public Run config silos handler =
-    do client.LoginAsync(TokenType.Bot, config.DiscordToken)
-        |> Async.AwaitTask
+    async {
+        do! client.LoginAsync(TokenType.Bot, config.DiscordToken)
+            |> Async.AwaitTask
 
-    client.add_MessageReceived(fun msg -> 
-        task {
-            do Shared.HandleMessage silos  (msg.Author.Id, msg.Content) handler
-            return 0
-        }
-    )
+        client.add_MessageReceived(fun msg -> 
+            task {
+                if msg.Channel.Id = config.Channel then 
+                    do Shared.HandleMessage silos  (msg.Author.Id, msg.Content) handler
+                return 0
+            }
+        )
 
-    do client.StartAsync()
-        |> Async.AwaitTask
-    Task.Delay -1
+        do! client.StartAsync()
+            |> Async.AwaitTask
+        do! Task.Delay -1
+            |> Async.AwaitTask
+    }
+
 
 let public SendMessageAsync  config userId (message: Message)= 
     let messageBody = 
