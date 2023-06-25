@@ -137,9 +137,6 @@ type Monitor(recepient: User, config: Config) =
                 |> Discord.Metadata
                 |> Dependency.Discord.SendMessageAsync Config (Some user)
                 |> Async.StartImmediate
-            | Email(email) -> 
-                results
-                |> Mail.NotifyEmail Config email
     member public self.Start period silosPath= 
         let thread = 
             new Thread(fun () -> 

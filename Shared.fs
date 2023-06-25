@@ -7,9 +7,9 @@ open Dependency.Core
 type 't Context= Context of 't * msgBody:string
 
 type 't Handler = {
-    Setup : 't Context -> int -> string -> unit
-    Accounts : 't Context -> unit
-    Remove : 't Context -> string -> unit
+    Setup : Option<'t Context -> int -> string -> unit>
+    Accounts : Option<'t Context -> unit>
+    Remove : Option<'t Context -> string -> unit>
     Watching: 't Context -> string -> unit
     Watch: 't Context -> string -> string list -> unit
     Unwatch: 't Context -> string -> string list -> unit
@@ -28,11 +28,18 @@ let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handl
             match rest with 
             | "--notify"::[email] -> email
             | [] -> userId
-        handler.Setup (Context (preContext, msgBody)) (Int32.Parse period) user
+        match handler.Setup with 
+        | Some(setup) -> setup (Context (preContext, msgBody)) (Int32.Parse period) user
+        | None -> ()
     | ["accounts?"]-> 
-        handler.Accounts (Context (preContext, msgBody)) 
+        match handler.Accounts with 
+        | Some(show) -> show (Context (preContext, msgBody)) 
+        | None -> ()
+        
     | ["remove"]-> 
-        handler.Remove (Context (preContext, msgBody)) userId
+        match handler.Remove with 
+        | Some(remove) -> remove (Context (preContext, msgBody)) userId
+        | None -> ()
     | ["watching?"]->
         handler.Watching (Context (preContext, msgBody)) userId
     | "watch"::eips ->  
