@@ -14,31 +14,49 @@ open System
 open System.Collections.Generic
 open System.Collections.Concurrent
 
-type User = 
-    | User of userId:uint64
-    | Email of email:string
-    with member self.ToString = 
-        match self with 
-        | User userId -> userId.ToString()
-        | Email email -> email
+type User = {
+        mutable LocalId : string
+        mutable SlackId : string option
+        mutable DiscordId : uint64 option
+        mutable Email : string option
+    } with  member self.ToString = self.LocalId
+            static member Create id = {
+                LocalId = id
+                SlackId = None
+                DiscordId = None
+                Email = None
+            }
+            member self.WithDiscordId discordId = self.DiscordId <- discordId; self
+            member self.WithSlackId slackId = self.SlackId <- slackId; self
+            member self.WithEmail email = self.Email <- email; self
 
 [<Class>]
 type Monitor(recepient: User, config: Config) = 
     let mutable State : Dictionary<int, string> = Dictionary<_, _>()
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
-    let mutable UserId : User = recepient
     let CancellationToken = new CancellationTokenSource()
-    let TemporaryFilePath = sprintf "%s.json" (UserId.ToString)
 
     new(path: string, filename:string, config:Config) as self= 
-        Monitor(User(UInt64.Parse filename), config)
-        then self.Start (20) path
+        let user = User.Create filename
+        Monitor(user, config)
+        then self.Start (3600 * 24) path
 
 
-    member val EmailId : User option= None with get, set
+    member val UserInstance : User = recepient with get, set
     member public _.Current() = (State, Flagged)
-    member public _.Path() = TemporaryFilePath
+    member public self.Path() = sprintf "%s.json" (self.UserInstance.ToString)
+
+    member private self.TakeSnapshot () : Snapshot.Snapshot =
+        {
+            Email = self.UserInstance.Email
+            Discord = self.UserInstance.DiscordId
+            Slack = self.UserInstance.SlackId
+
+            State = State
+            Flagged =  Flagged
+            Period = 3600 * 24
+        }
 
     member private _.GetRequestWithAuth (key:string) eip =
         async {
@@ -54,28 +72,23 @@ type Monitor(recepient: User, config: Config) =
     member public self.SaveInFile pathPrefix =
         try
             printf "Save : %A\n::> " State
-            let json = JsonSerializer.Serialize(State)
-            let fileContent =  
-                match self.EmailId with 
-                | Some email -> sprintf "%s %s" email.ToString json
-                | None -> sprintf "None %s" json
-            File.WriteAllText(Path.Combine(pathPrefix,TemporaryFilePath), fileContent)
+            let snapshot = self.TakeSnapshot()
+            let json = JsonSerializer.Serialize(snapshot)
+            File.WriteAllText(Path.Combine(pathPrefix, self.Path()), json)
         with
             | e -> printf "%s" e.Message
 
     member private self.ReadInFile path =
         try
             let fileContent = File.ReadAllText(path)
-            let (userId, json) = 
-                let firstSpace = fileContent.IndexOf(' ')
-                fileContent.Substring(0, firstSpace), fileContent.Substring(firstSpace + 1)
-
-            self.EmailId <- if userId = "None" then None
-                            else Some (Email userId)
-
-            State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
-            self.HandleEips (Set.ofSeq State.Keys)
-            self.Watch (Set.ofSeq State.Keys) 
+            let snapshot = JsonSerializer.Deserialize<Snapshot.Snapshot>(fileContent)
+            do ignore <| self.UserInstance
+                .WithDiscordId(snapshot.Discord)
+                .WithSlackId(snapshot.Slack)
+                .WithEmail(snapshot.Email)
+                
+            State <- snapshot.State
+            self.Watch Flagged
             printfn "::> Restore : %A" State
         with
             | _ -> ()
@@ -108,16 +121,14 @@ type Monitor(recepient: User, config: Config) =
 
     member public self.Watch (eips:int Set) = 
         Flagged <- Set.union eips Flagged
-        let newStateSegment = self.GetEipMetadata eips
-        for kvp in newStateSegment do 
-            State[kvp.Key] <- kvp.Value
+        self.HandleEips Flagged
 
     member public _.Unwatch eips = 
         Flagged <- Set.difference Flagged eips 
         eips |> Set.iter (fun eip -> ignore <| State.Remove(eip))
     
     member private self.GetEipMetadata eips : Dictionary<_, _> =
-        let GetEipFileData = self.GetRequestWithAuth Config.GitToken
+        let GetEipFileData = self.GetRequestWithAuth Config.GithubConfig.Token
         let newState = new Dictionary<int, string>()
         do eips |> Set.iter (fun eip -> newState[eip] <- (GetEipFileData  eip).["sha"].AsString())
         newState
@@ -142,16 +153,26 @@ type Monitor(recepient: User, config: Config) =
                 |> flatten []
 
 
-            match UserId with
-            | User(user) -> 
-                results
-                |> Discord.Metadata
-                |> Dependency.Discord.SendMessageAsync Config (Some user)
+            match self.UserInstance.DiscordId with
+            | Some(userId) -> 
+                Metadata results
+                |> Dependency.Discord.SendMessageAsync Config (Some userId)
                 |> Async.StartImmediate
-
-            if self.EmailId.IsSome then 
+            | None -> ()
+            
+            match self.UserInstance.Email with
+            | Some(email) -> 
                 results
-                |> Mail.NotifyEmail Config self.EmailId.Value.ToString
+                |> Mail.NotifyEmail Config email
+            | None -> ()
+
+            match self.UserInstance.SlackId with
+            | Some(username) -> 
+                Metadata results
+                |> Slack.SendMessageAsync Config (Some username)
+                |> Async.StartImmediate
+            | None -> ()
+
 
 
     member public self.Start period silosPath= 

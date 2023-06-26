@@ -2,18 +2,37 @@
 
 open System
 
-type Config = {
+type DiscordConfig = {
+    Channel: UInt64
+    Token: string
+}
+
+type SlackConfig = {
+    Channel: string
+    Token: string
+    Secret: string
+}
+
+type GithubConfig = {
+    Token: string
+}
+
+type SMTPConfig = {
     Server: string
     Sender: string
     Password: string
     Port: int
     EnableSsl : bool
-    Channel: UInt64
-    GitToken: string
-    DiscordToken: string
 }
 
-let public getConfigFromFile filePath = 
+type Config = {
+    GithubConfig: GithubConfig
+    EmailConfig: SMTPConfig
+    DiscordConfig: DiscordConfig
+    SlackConfig: SlackConfig
+}
+
+let public GetConfigFromFile filePath = 
     try 
         let fileContent = System.IO.File.ReadAllText(filePath)
         let configs = System.Text.Json.JsonSerializer.Deserialize<Config>(fileContent)

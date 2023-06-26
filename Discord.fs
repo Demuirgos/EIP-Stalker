@@ -7,10 +7,6 @@ open System.Threading.Tasks
 open Dependency.Shared
 open Dependency.Config
 
-type Message = 
-    | Metadata of Core.Metadata list 
-    | Text of string
-
 let mutable client : DiscordSocketClient = 
     let privilage = GatewayIntents.AllUnprivileged ||| GatewayIntents.MessageContent ||| GatewayIntents.GuildPresences
     let discordSocketConfig = new DiscordSocketConfig()
@@ -19,13 +15,13 @@ let mutable client : DiscordSocketClient =
 
 let public Run config silos handler =
     async {
-        do! client.LoginAsync(TokenType.Bot, config.DiscordToken)
+        do! client.LoginAsync(TokenType.Bot, config.DiscordConfig.Token)
             |> Async.AwaitTask
 
         client.add_MessageReceived(fun msg -> 
             task {
-                if msg.Channel.Id = config.Channel then 
-                    do Shared.HandleMessage silos  (msg.Author.Id, msg.Content) handler
+                if msg.Channel.Id = config.DiscordConfig.Channel then 
+                    do Shared.HandleMessage silos  (string msg.Author.Id, msg.Content) handler
                 return 0
             }
         )
@@ -46,22 +42,16 @@ let public SendMessageAsync  config userId (message: Message)=
     
     async {
         let! channel = 
-            client.GetChannelAsync(config.Channel).AsTask() 
+            client.GetChannelAsync(config.DiscordConfig.Channel).AsTask() 
             |> Async.AwaitTask 
         let messageChannel = channel :?> IMessageChannel
-        let! msg = match userId with 
+        match userId with 
             | Some(userId) -> 
-                async {
-                    let! user = messageChannel.GetUserAsync(userId, CacheMode.AllowDownload ) |> Async.AwaitTask
-                    return sprintf "%s: \n%s" user.Mention messageBody 
-                }
+                let! user = messageChannel.GetUserAsync(userId, CacheMode.AllowDownload ) |> Async.AwaitTask
+                let! _ = user.SendMessageAsync (sprintf "%s here are the eips that changed: \n%s" user.Mention messageBody) |> Async.AwaitTask 
+                return ()
             | None -> 
-                async {
-                    return sprintf "%s" messageBody 
-                }
-        do  messageChannel.SendMessageAsync msg
-            |> Async.AwaitTask 
-            |> ignore
-        return ()
+                let! _ = messageChannel.SendMessageAsync (sprintf "%s" messageBody)|> Async.AwaitTask 
+                return ()
     }
 

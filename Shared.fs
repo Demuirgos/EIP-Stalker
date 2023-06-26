@@ -6,6 +6,10 @@ open Dependency.Core
 
 type 't Context= Context of 't * msgBody:string
 
+type Message = 
+    | Metadata of Core.Metadata list 
+    | Text of string
+
 type 't Handler = {
     Setup : Option<'t Context -> int -> string -> unit>
     Accounts : Option<'t Context -> unit>
@@ -19,10 +23,7 @@ type 't Handler = {
 
 let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
 
-let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handler:'a Handler)= 
-
-    let userId = sender.ToString()
-
+let rec HandleMessage (preContext:'a) ((userId, msgBody):string * string) (handler:'a Handler)= 
     let commandLine = msgBody.Split() |> List.ofArray |> List.map (fun str -> str.Trim())
     match commandLine with 
     | "setup"::"--period"::period::rest -> 
@@ -54,8 +55,7 @@ let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handl
         handler.Ignore (Context (preContext, msgBody)) userId
     | _ -> ()
 
-
 let rec ReadLiveCommand preCtx handler= 
     printf "\n::> "
-    HandleMessage preCtx (UInt64.MinValue, Console.ReadLine()) handler
+    HandleMessage preCtx (String.Empty, Console.ReadLine()) handler
     do ReadLiveCommand preCtx

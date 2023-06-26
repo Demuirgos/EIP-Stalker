@@ -24,79 +24,7 @@ let failureHelpMessage =
         GitToken: alphanum
     }"
 
-let DiscordHandler = 
-    let createNewUser period userId silos= 
-        let monitor = Monitor(User(UInt64.Parse userId), silos.Config)
-        do Silos.AddAccount userId monitor silos 
-        do monitor.Start period Silos.TemporaryFilePath
-    {
-        Setup = None
-        Accounts = None
-        Remove = None
-        Watching =    function
-            | Context((config, silos), _) -> 
-                fun userId -> 
-                    let message = 
-                        if silos.Monitors.ContainsKey userId 
-                        then sprintf "Currently Watching : %A" (silos.Monitors[userId].Current())
-                        else sprintf "Current Watching : []"
-                
-                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
-                    |> Async.RunSynchronously
-        Watch =    function
-            | Context((config, silos), _) -> 
-                fun userId eips -> 
-                    let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) userId silos
-                
-                        silos.Monitors[userId].Watch (Set.ofList eips)
-                        sprintf "Started Watching : %A" eips
-                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
-                    |> Async.RunSynchronously
-        Unwatch =    function
-            | Context((config, silos), _) -> 
-                fun userId eips -> 
-                    let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                    let message = 
-                        if silos.Monitors.ContainsKey userId 
-                        then 
-                            silos.Monitors[userId].Unwatch (Set.ofList eips)
-                            sprintf "Stopped Watching : %A" eips
-                        else 
-                            sprintf "You are not watching any Eips"
-                
-                    let watching = snd (silos.Monitors[userId].Current())
 
-                    if Set.isEmpty watching then 
-                        Silos.RemoveAccount userId silos 
-
-                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
-                    |> Async.RunSynchronously
-        Notify = function 
-            | Context((config, silos), _) -> 
-                fun userId email ->  
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) userId silos
-                
-                        silos.Monitors[userId].EmailId <- Some (Email email)
-                        sprintf "Email %s notifications activated" email
-                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
-                    |> Async.RunSynchronously
-        Ignore = function 
-            | Context((config, silos), _) -> 
-                fun userId ->  
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) userId silos
-                
-                        silos.Monitors[userId].EmailId <- None
-                        sprintf "Email notifications deactivated" 
-                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
-                    |> Async.RunSynchronously
-    }
 
 [<EntryPoint>]
 let main args = 
@@ -108,13 +36,20 @@ let main args =
     match smtpConfigsPath with 
     | None -> failureHelpMessage 
     | Some path -> 
-        let config = Config.getConfigFromFile path
+        let config = Config.GetConfigFromFile path
         let silos = Silos.ReadInFile config.Value
         Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos; exit 0)
         let discordThread = new Thread(
             fun () -> 
-            do Discord.Run config.Value (config.Value, silos) DiscordHandler
+            do Discord.Run config.Value (config.Value, silos) Dependency.Discord.Handlers.DiscordHandler
                 |> Async.RunSynchronously
         )
+
+        let slackThread = new Thread(
+            fun () -> 
+            do Slack.Run config.Value (config.Value, silos) Dependency.Slack.Handler.SlackHandler
+        )
+
+        slackThread.Start()
         discordThread.Start()
     0
