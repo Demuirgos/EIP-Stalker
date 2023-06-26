@@ -9,6 +9,7 @@
     <Content Include="EmailDummy.json" />
     <Compile Include="Metadata.fs" />
     <Compile Include="Shared.fs" />
+    <Compile Include="Mail.fs" />
 	<Compile Include="Discord.fs" />
     <Compile Include="Monitor.fs" />
     <Compile Include="Silos.fs" />

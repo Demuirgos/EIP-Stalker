@@ -49,7 +49,7 @@ let DiscordHandler =
                     let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
                     let message = 
                         if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) userId silos
+                        then createNewUser 10 userId silos
                 
                         silos.Monitors[userId].Watch (Set.ofList eips)
                         sprintf "Started Watching : %A" eips
@@ -72,6 +72,28 @@ let DiscordHandler =
                     if Set.isEmpty watching then 
                         Silos.RemoveAccount userId silos 
 
+                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                    |> Async.RunSynchronously
+        Notify = function 
+            | Context((config, silos), _) -> 
+                fun userId email ->  
+                    let message = 
+                        if not <| silos.Monitors.ContainsKey userId 
+                        then createNewUser (3600 * 24) userId silos
+                
+                        silos.Monitors[userId].EmailId <- Some (Email email)
+                        sprintf "Email %s notifications activated" email
+                    Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
+                    |> Async.RunSynchronously
+        Ignore = function 
+            | Context((config, silos), _) -> 
+                fun userId ->  
+                    let message = 
+                        if not <| silos.Monitors.ContainsKey userId 
+                        then createNewUser (3600 * 24) userId silos
+                
+                        silos.Monitors[userId].EmailId <- None
+                        sprintf "Email notifications deactivated" 
                     Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Discord.Text message)
                     |> Async.RunSynchronously
     }

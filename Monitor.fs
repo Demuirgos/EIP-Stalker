@@ -7,6 +7,7 @@ open System.Text.Json
 open System.Net.Http.Headers
 open System.Threading
 open Dependency.Config
+open Dependency.Shared
 open Dependency.Core
 
 open System
@@ -27,16 +28,15 @@ type Monitor(recepient: User, config: Config) =
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
     let mutable UserId : User = recepient
-
     let CancellationToken = new CancellationTokenSource()
     let TemporaryFilePath = sprintf "%s.json" (UserId.ToString)
 
     new(path: string, filename:string, config:Config) as self= 
         Monitor(User(UInt64.Parse filename), config)
-        then self.ReadInFile path
-             self.Start 10 (Path.GetDirectoryName(path))
+        then self.Start 10 path
 
 
+    member val EmailId : User option= None with get, set
     member public _.Current() = (State, Flagged)
     member public _.Path() = TemporaryFilePath
 
@@ -51,17 +51,28 @@ type Monitor(recepient: User, config: Config) =
         } |> Async.RunSynchronously
           |> JsonValue.Parse
 
-    member public _.SaveInFile pathPrefix =
+    member public self.SaveInFile pathPrefix =
         try
             printf "Save : %A\n::> " State
             let json = JsonSerializer.Serialize(State)
-            File.WriteAllText(Path.Combine(pathPrefix,TemporaryFilePath), json)
+            let fileContent =  
+                match self.EmailId with 
+                | Some email -> sprintf "%s %s" email.ToString json
+                | None -> sprintf "None %s" json
+            File.WriteAllText(Path.Combine(pathPrefix,TemporaryFilePath), fileContent)
         with
             | e -> printf "%s" e.Message
 
     member private self.ReadInFile path =
         try
-            let json = File.ReadAllText(path)
+            let fileContent = File.ReadAllText(path)
+            let (userId, json) = 
+                let firstSpace = fileContent.IndexOf(' ')
+                fileContent.Substring(0, firstSpace), fileContent.Substring(firstSpace + 1)
+
+            self.EmailId <- if userId = "None" then None
+                            else Some (Email userId)
+
             State <- JsonSerializer.Deserialize<Dictionary<int, string>>(json)
             self.HandleEips (Set.ofSeq State.Keys)
             self.Watch (Set.ofSeq State.Keys) 
@@ -113,6 +124,7 @@ type Monitor(recepient: User, config: Config) =
 
     member private self.HandleEips eips= 
         let eipData = self.GetEipMetadata eips 
+        State[4750] <- "61e226d581920a9c22ff2ccfec27126875e45439"
         let changedEips = self.CompareDiffs State eipData eips
         match changedEips with 
         | _ when Set.isEmpty changedEips -> ()
@@ -137,6 +149,12 @@ type Monitor(recepient: User, config: Config) =
                 |> Discord.Metadata
                 |> Dependency.Discord.SendMessageAsync Config (Some user)
                 |> Async.StartImmediate
+
+            if self.EmailId.IsSome then 
+                results
+                |> Mail.NotifyEmail Config self.EmailId.Value.ToString
+
+
     member public self.Start period silosPath= 
         let thread = 
             new Thread(fun () -> 

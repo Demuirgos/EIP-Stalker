@@ -12,7 +12,7 @@ type Message =
     | Text of string
 
 let mutable client : DiscordSocketClient = 
-    let privilage = GatewayIntents.AllUnprivileged ||| GatewayIntents.MessageContent
+    let privilage = GatewayIntents.AllUnprivileged ||| GatewayIntents.MessageContent ||| GatewayIntents.GuildPresences
     let discordSocketConfig = new DiscordSocketConfig()
     discordSocketConfig.GatewayIntents <- privilage
     DiscordSocketClient(discordSocketConfig)
@@ -52,7 +52,7 @@ let public SendMessageAsync  config userId (message: Message)=
         let! msg = match userId with 
             | Some(userId) -> 
                 async {
-                    let! user = userId |> messageChannel.GetUserAsync |> Async.AwaitTask
+                    let! user = messageChannel.GetUserAsync(userId, CacheMode.AllowDownload ) |> Async.AwaitTask
                     return sprintf "%s: \n%s" user.Mention messageBody 
                 }
             | None -> 

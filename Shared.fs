@@ -13,6 +13,8 @@ type 't Handler = {
     Watching: 't Context -> string -> unit
     Watch: 't Context -> string -> string list -> unit
     Unwatch: 't Context -> string -> string list -> unit
+    Notify: 't Context -> string -> string -> unit
+    Ignore: 't Context -> string  -> unit
 }
 
 let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
@@ -46,6 +48,10 @@ let rec HandleMessage (preContext:'a) ((sender, msgBody):UInt64 * string) (handl
         handler.Watch (Context (preContext, msgBody)) userId eips
     | "unwatch"::eips -> 
         handler.Unwatch (Context (preContext, msgBody)) userId eips
+    | "notify"::[email] -> 
+        handler.Notify (Context (preContext, msgBody)) userId email
+    | "ignore"::["email"] -> 
+        handler.Ignore (Context (preContext, msgBody)) userId
     | _ -> ()
 
 
