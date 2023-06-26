@@ -22,6 +22,7 @@ let public Run config silos handler resolver=
             task {
                 if msg.Channel.Id = config.DiscordConfig.Channel then 
                     do Shared.HandleMessage silos  (Discord msg.Author.Id, msg.Content) handler resolver
+                    do! msg.DeleteAsync()
                 return 0
             }
         )

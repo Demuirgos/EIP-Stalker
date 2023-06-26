@@ -8,13 +8,16 @@ open Dependency.Shared
 
 let Handler (config: DiscordConfig) = 
     let createNewUser period discordId silos= 
-        let userId = Guid.NewGuid().ToString()
-        let user = (User.Create (userId))
-                    .WithDiscordId discordId
-        let monitor = Monitor(user, silos.Config)
-        do Dependency.Silos.AddAccount user.LocalId monitor silos 
-        do monitor.Start period Dependency.Silos.TemporaryFilePath
-        userId
+        match Dependency.Silos.ResolveAccount silos (Discord discordId) with 
+        | Some id -> None
+        | _ -> 
+            let userId = Guid.NewGuid().ToString()
+            let user = (User.Create (userId))
+                        .WithDiscordId (Some discordId)
+            let monitor = Monitor(user, silos.Config)
+            do Dependency.Silos.AddAccount user.LocalId monitor silos 
+            do monitor.Start period Dependency.Silos.TemporaryFilePath
+            Some userId
     if not <| config.Include 
     then None
     else
@@ -30,8 +33,11 @@ let Handler (config: DiscordConfig) =
                                     .WithDiscordId (Some id)
                                 id, sprintf "Discord account hooked to Id : %s" oldUser 
                             | Discord id, None -> 
-                                let ref_id = createNewUser period (Some id) silos
-                                id, sprintf "Discord account hooked with Id : %s" ref_id 
+                                let message = 
+                                    match createNewUser period id silos with
+                                    | Some ref_id -> sprintf "Discord account hooked with Id : %s" ref_id 
+                                    | None -> sprintf "Account with Id : %d already exists" id
+                                id, message
                             | _ -> failwith "unreacheable code"
                         Dependency.Discord.SendMessageAsync config (Some id) (Text message)
                         |> Async.RunSynchronously

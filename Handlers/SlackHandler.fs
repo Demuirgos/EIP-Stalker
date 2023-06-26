@@ -8,12 +8,16 @@ open Dependency.Shared
 
 let Handler (config: SlackConfig) = 
     let createNewUser period slackId silos= 
-        let userId = Guid.NewGuid().ToString()
-        let user = (User.Create (userId))
-                    .WithSlackId slackId
-        let monitor = Monitor(user, silos.Config)
-        do Dependency.Silos.AddAccount user.LocalId monitor silos 
-        do monitor.Start period Dependency.Silos.TemporaryFilePath
+        match Dependency.Silos.ResolveAccount silos (Slack slackId) with 
+        | Some id -> None
+        | _ -> 
+            let userId = Guid.NewGuid().ToString()
+            let user = (User.Create (userId))
+                        .WithSlackId (Some slackId)
+            let monitor = Monitor(user, silos.Config)
+            do Dependency.Silos.AddAccount user.LocalId monitor silos 
+            do monitor.Start period Dependency.Silos.TemporaryFilePath
+            Some userId
 
     if not <| config.Include 
     then None
@@ -22,14 +26,22 @@ let Handler (config: SlackConfig) =
             Setup = function
                 | Context((config, silos), _) -> 
                     fun period (userId, userRef) -> 
-                        match userId, userRef with 
-                        | Slack id, Some oldUser -> 
-                            let user = silos.Monitors[oldUser]
-                            do ignore <| user.UserInstance
-                                .WithSlackId (Some id)
-                        | Slack id, None -> createNewUser period (Some id) silos
-                        | _ -> failwith "unreacheable code"
-                        ()
+                        let (id, message) = 
+                            match userId, userRef with 
+                            | Slack id, Some oldUser -> 
+                                let user = silos.Monitors[oldUser]
+                                do ignore <| user.UserInstance
+                                    .WithSlackId (Some id)
+                                id, sprintf "Slack account hooked to Id : %s" oldUser 
+                            | Slack id, None -> 
+                                let message = 
+                                    match createNewUser period id silos with
+                                    | Some ref_id -> sprintf "Slack account hooked with Id : %s" ref_id 
+                                    | None -> sprintf "Account with Id : %s already exists" id
+                                id, message
+                            | _ -> failwith "unreacheable code"
+                        Dependency.Slack.SendMessageAsync config (Some id) (Text message)
+                        |> Async.RunSynchronously
             Accounts = None
             Remove = None
             Watching =    function

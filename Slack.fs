@@ -16,6 +16,10 @@ let MessageHandler silos config handler resolver=
             task {
                 if slackEvent.Channel = config.Channel then 
                     HandleMessage silos (Slack slackEvent.User, slackEvent.Text) handler resolver
+                let! _ =  
+                    client.Chat.Delete(Utils.ToTimestamp(slackEvent.Timestamp), config.Channel, true)
+                    |> Async.AwaitTask
+                return ()
             }
     }
 

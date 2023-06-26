@@ -49,11 +49,6 @@ type User = {
 
 
 let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
-
-
-
-
-
 let rec HandleMessage (preContext:'a) ((userId, msgBody):ID * string) (commandHandler:'a Handler option) (accountResolver: ID -> string option)= 
     let user = accountResolver userId
     match commandHandler with 
