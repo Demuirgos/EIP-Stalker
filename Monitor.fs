@@ -33,7 +33,7 @@ type Monitor(recepient: User, config: Config) =
 
     new(path: string, filename:string, config:Config) as self= 
         Monitor(User(UInt64.Parse filename), config)
-        then self.Start (3600 * 24) path
+        then self.Start (20) path
 
 
     member val EmailId : User option= None with get, set
@@ -124,7 +124,6 @@ type Monitor(recepient: User, config: Config) =
 
     member private self.HandleEips eips= 
         let eipData = self.GetEipMetadata eips 
-        State[4750] <- "61e226d581920a9c22ff2ccfec27126875e45439"
         let changedEips = self.CompareDiffs State eipData eips
         match changedEips with 
         | _ when Set.isEmpty changedEips -> ()
