@@ -3,11 +3,13 @@
 open System
 
 type DiscordConfig = {
+    Include: bool
     Channel: UInt64
     Token: string
 }
 
 type SlackConfig = {
+    Include: bool
     Channel: string
     Token: string
     Secret: string
@@ -18,6 +20,7 @@ type GithubConfig = {
 }
 
 type SMTPConfig = {
+    Include: bool
     Server: string
     Sender: string
     Password: string

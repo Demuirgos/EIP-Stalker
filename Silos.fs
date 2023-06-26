@@ -5,15 +5,15 @@
     open System.Security.Cryptography
     open System
     open System.Text
-    open Dependency.Config
+    open Dependency.Shared
 
     type Silos = {
         Monitors: Dictionary<string, Monitor>
-        Config: Config
+        Config: Config.Config
     }
 
     let Empty config = {
-        Monitors = Dictionary<string, Monitor>()
+        Monitors = Dictionary<string, Dependency.Monitor.Monitor>()
         Config = config 
     }
     
@@ -28,12 +28,27 @@
         sha1.ComputeHash(Encoding.ASCII.GetBytes(str))
         |> Convert.ToBase64String
 
-
     let AddAccount userId monitor silos= 
         do silos.Monitors.Add(userId, monitor)
 
     let RemoveAccount userId silos = 
         do silos.Monitors.Remove(userId)
+
+    let ResolveAccount (silos:Silos) id = 
+        let filter = 
+            function
+            | Discord d_id -> fun (user:User) -> user.DiscordId = Some d_id
+            | Slack s_id -> fun (user:User) -> user.SlackId= Some s_id
+            | Guid g_id -> fun (user:User) -> user.LocalId = g_id
+
+        let result = 
+            silos.Monitors.Values 
+            |> Seq.map (fun monitor -> monitor.UserInstance) 
+            |> Seq.tryFind (filter id) 
+
+        match result with 
+        | Some user -> Some user.LocalId
+        | None -> None
 
     let SaveInFile (silos:Silos) =
         FlushFolder()

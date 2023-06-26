@@ -1,4 +1,4 @@
-﻿module Dependency.Discord.Handlers
+﻿module Dependency.Handlers.Discord
 
 open System
 open Dependency.Monitor
@@ -6,7 +6,7 @@ open Dependency.Config
 open Dependency.Silos
 open Dependency.Shared
 
-let DiscordHandler = 
+let Handler (config: DiscordConfig) = 
     let createNewUser period discordId silos= 
         let userId = Guid.NewGuid().ToString()
         let user = (User.Create (userId))
@@ -14,71 +14,86 @@ let DiscordHandler =
         let monitor = Monitor(user, silos.Config)
         do Dependency.Silos.AddAccount user.LocalId monitor silos 
         do monitor.Start period Dependency.Silos.TemporaryFilePath
-    {
-        Setup = None
-        Accounts = None
-        Remove = None
-        Watching =    function
-            | Context((config, silos), _) -> 
-                fun userId -> 
-                    let message = 
-                        if silos.Monitors.ContainsKey userId 
-                        then sprintf "Currently Watching : %A" (silos.Monitors[userId].Current())
-                        else sprintf "Current Watching : []"
-                
-                    Dependency.Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Text message)
-                    |> Async.RunSynchronously
-        Watch =    function
-            | Context((config, silos), _) -> 
-                fun userId eips -> 
-                    let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) (Some <| UInt64.Parse userId) silos
-                
-                        silos.Monitors[userId].Watch (Set.ofList eips)
-                        sprintf "Started Watching : %A" eips
-                    Dependency.Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Text message)
-                    |> Async.RunSynchronously
-        Unwatch =    function
-            | Context((config, silos), _) -> 
-                fun userId eips -> 
-                    let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
-                    let message = 
-                        if silos.Monitors.ContainsKey userId 
-                        then 
-                            silos.Monitors[userId].Unwatch (Set.ofList eips)
-                            sprintf "Stopped Watching : %A" eips
-                        else 
-                            sprintf "You are not watching any Eips"
-                
-                    let watching = snd (silos.Monitors[userId].Current())
-
-                    if Set.isEmpty watching then 
-                        Dependency.Silos.RemoveAccount userId silos 
-
-                    Dependency.Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Text message)
-                    |> Async.RunSynchronously
-        Notify = function 
-            | Context((config, silos), _) -> 
-                fun userId email ->  
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) (Some <| UInt64.Parse userId) silos
-                
-                        ignore <| silos.Monitors[userId].UserInstance.WithEmail (Some email)
-                        sprintf "Email %s notifications activated" email
-                    Dependency.Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Text message)
-                    |> Async.RunSynchronously
-        Ignore = function 
-            | Context((config, silos), _) -> 
-                fun userId ->  
-                    let message = 
-                        if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser (3600 * 24) (Some <| UInt64.Parse userId) silos
-                
-                        do ignore <| silos.Monitors[userId].UserInstance.WithEmail None
-                        sprintf "Email notifications deactivated" 
-                    Dependency.Discord.SendMessageAsync config (Some <| UInt64.Parse userId) (Text message)
-                    |> Async.RunSynchronously
-    }
+        userId
+    if not <| config.Include 
+    then None
+    else
+        Some <| {
+            Setup = function
+                | Context((config, silos), _) -> 
+                    fun period (userId, userRef) -> 
+                        let (id, message) = 
+                            match userId, userRef with 
+                            | Discord id, Some oldUser -> 
+                                let user = silos.Monitors[oldUser]
+                                do ignore <| user.UserInstance
+                                    .WithDiscordId (Some id)
+                                id, sprintf "Discord account hooked to Id : %s" oldUser 
+                            | Discord id, None -> 
+                                let ref_id = createNewUser period (Some id) silos
+                                id, sprintf "Discord account hooked with Id : %s" ref_id 
+                            | _ -> failwith "unreacheable code"
+                        Dependency.Discord.SendMessageAsync config (Some id) (Text message)
+                        |> Async.RunSynchronously
+            Accounts = None
+            Remove = None
+            Watching =    function
+                | Context((config, silos), _) -> 
+                    fun userId -> 
+                        match userId with 
+                        | Some userId -> 
+                            let user = silos.Monitors[userId]
+                            let message = sprintf "Currently Watching : %A" (user.Current())
+                            Dependency.Discord.SendMessageAsync config (user.UserInstance.DiscordId) (Text message)
+                            |> Async.RunSynchronously
+                        | None -> printfn "Account not yet setup, please setup the account"
+            Watch =    function
+                | Context((config, silos), _) -> 
+                    fun userId eips -> 
+                        match userId with 
+                        | Some userId -> 
+                            let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                            let user =  silos.Monitors[userId]
+                            do user.Watch (Set.ofList eips)
+                            let message = sprintf "Started Watching : %A" eips
+                            Dependency.Discord.SendMessageAsync config (user.UserInstance.DiscordId) (Text message)
+                            |> Async.RunSynchronously
+                        | None -> printf "Account not yet setup, please setup the account"
+            Unwatch =    function
+                | Context((config, silos), _) -> 
+                    fun userId eips -> 
+                        match userId with 
+                        | Some userId -> 
+                            let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                            let user =  silos.Monitors[userId]
+                            do user.Unwatch (Set.ofList eips)
+                                    
+                            let message = sprintf "Stopped Watching : %A" eips
+                            Dependency.Discord.SendMessageAsync config (user.UserInstance.DiscordId) (Text message)
+                            |> Async.RunSynchronously
+                        | None -> printf "Account not yet setup, please setup the account"
+            Notify = function 
+                | Context((config, silos), _) -> 
+                    fun userId email ->  
+                        match userId with 
+                        | Some userId -> 
+                            let user =  silos.Monitors[userId]
+                            let message = 
+                                ignore <| user.UserInstance.WithEmail (Some email)
+                                sprintf "Email %s notifications activated" email
+                            Dependency.Discord.SendMessageAsync config (user.UserInstance.DiscordId) (Text message)
+                            |> Async.RunSynchronously
+                        | None -> printf "Account not yet setup, please setup the account"
+            Ignore = function 
+                | Context((config, silos), _) -> 
+                    fun userId ->  
+                        match userId with 
+                        | Some userId -> 
+                            let user =  silos.Monitors[userId]
+                            let message = 
+                                ignore <| user.UserInstance.WithEmail (None)
+                                sprintf "Email notifications deactivated" 
+                            Dependency.Discord.SendMessageAsync config (user.UserInstance.DiscordId) (Text message)
+                            |> Async.RunSynchronously
+                        | None -> printf "Account not yet setup, please setup the account"
+        }

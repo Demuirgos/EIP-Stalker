@@ -13,7 +13,7 @@ let mutable client : DiscordSocketClient =
     discordSocketConfig.GatewayIntents <- privilage
     DiscordSocketClient(discordSocketConfig)
 
-let public Run config silos handler =
+let public Run config silos handler resolver=
     async {
         do! client.LoginAsync(TokenType.Bot, config.DiscordConfig.Token)
             |> Async.AwaitTask
@@ -21,7 +21,7 @@ let public Run config silos handler =
         client.add_MessageReceived(fun msg -> 
             task {
                 if msg.Channel.Id = config.DiscordConfig.Channel then 
-                    do Shared.HandleMessage silos  (string msg.Author.Id, msg.Content) handler
+                    do Shared.HandleMessage silos  (Discord msg.Author.Id, msg.Content) handler resolver
                 return 0
             }
         )
@@ -48,7 +48,7 @@ let public SendMessageAsync  config userId (message: Message)=
         match userId with 
             | Some(userId) -> 
                 let! user = messageChannel.GetUserAsync(userId, CacheMode.AllowDownload ) |> Async.AwaitTask
-                let! _ = user.SendMessageAsync (sprintf "%s here are the eips that changed: \n%s" user.Mention messageBody) |> Async.AwaitTask 
+                let! _ = user.SendMessageAsync (sprintf "%s: \n%s" user.Mention messageBody) |> Async.AwaitTask 
                 return ()
             | None -> 
                 let! _ = messageChannel.SendMessageAsync (sprintf "%s" messageBody)|> Async.AwaitTask 

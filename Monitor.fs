@@ -10,25 +10,8 @@ open Dependency.Config
 open Dependency.Shared
 open Dependency.Core
 
-open System
 open System.Collections.Generic
-open System.Collections.Concurrent
 
-type User = {
-        mutable LocalId : string
-        mutable SlackId : string option
-        mutable DiscordId : uint64 option
-        mutable Email : string option
-    } with  member self.ToString = self.LocalId
-            static member Create id = {
-                LocalId = id
-                SlackId = None
-                DiscordId = None
-                Email = None
-            }
-            member self.WithDiscordId discordId = self.DiscordId <- discordId; self
-            member self.WithSlackId slackId = self.SlackId <- slackId; self
-            member self.WithEmail email = self.Email <- email; self
 
 [<Class>]
 type Monitor(recepient: User, config: Config) = 

@@ -20,6 +20,8 @@ let private SendMailMessage config email subject msg =
         } |> Async.Start
 
 let public NotifyEmail config email (eip : Metadata list) =
+    if not config.EmailConfig.Include then ()
+
     let subject = sprintf "Some EIPs have been updated"
     let link = sprintf "https://eips.ethereum.org/EIPS/eip-%d"
     let body = sprintf "

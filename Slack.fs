@@ -8,19 +8,19 @@ open Dependency.Shared
 open Dependency.Config
 open SlackNet.Events
 
-let mutable client : ISlackApiClient = Unchecked.defaultof<SlackApiClient >
+let mutable client : ISlackApiClient = Unchecked.defaultof<SlackApiClient>
 
-let MessageHandler silos config handler =
+let MessageHandler silos config handler resolver=
     { new IEventHandler<MessageEvent>  with
         member this.Handle(slackEvent: MessageEvent) = 
             task {
                 if slackEvent.Channel = config.Channel then 
-                    HandleMessage silos (slackEvent.User, slackEvent.Text) handler
+                    HandleMessage silos (Slack slackEvent.User, slackEvent.Text) handler resolver
             }
     }
 
-let public Run (config:Config) silos handler =
-    let handler = MessageHandler silos config.SlackConfig handler
+let public Run (config:Config) silos handler resolver=
+    let handler = MessageHandler silos config.SlackConfig handler resolver
     client <- SlackServiceBuilder()
                     .UseApiToken(config.SlackConfig.Token)
                     .RegisterEventHandler<MessageEvent>(handler)
