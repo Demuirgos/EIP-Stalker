@@ -33,7 +33,7 @@ type Monitor(recepient: User, config: Config) =
 
     new(path: string, filename:string, config:Config) as self= 
         Monitor(User(UInt64.Parse filename), config)
-        then self.Start 10 path
+        then self.Start (3600 * 24) path
 
 
     member val EmailId : User option= None with get, set

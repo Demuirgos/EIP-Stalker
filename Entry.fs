@@ -49,7 +49,7 @@ let DiscordHandler =
                     let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
                     let message = 
                         if not <| silos.Monitors.ContainsKey userId 
-                        then createNewUser 10 userId silos
+                        then createNewUser (3600 * 24) userId silos
                 
                         silos.Monitors[userId].Watch (Set.ofList eips)
                         sprintf "Started Watching : %A" eips
