@@ -38,7 +38,7 @@ type Monitor(recepient: User, config: Config) =
 
             State = State
             Flagged =  Flagged
-            Period = 3600 * 24
+            Period = 10
         }
 
     member private _.GetRequestWithAuth (key:string) eip =
@@ -71,7 +71,7 @@ type Monitor(recepient: User, config: Config) =
                 .WithEmail(snapshot.Email)
                 
             State <- snapshot.State
-            self.Watch Flagged
+            self.Watch snapshot.Flagged
             printfn "::> Restore : %A" State
         with
             | _ -> ()
@@ -118,6 +118,7 @@ type Monitor(recepient: User, config: Config) =
 
     member private self.HandleEips eips= 
         let eipData = self.GetEipMetadata eips 
+        State[4200] <- "1f407df79940a154a1e584cdebdf79ef2f579b57"
         let changedEips = self.CompareDiffs State eipData eips
         match changedEips with 
         | _ when Set.isEmpty changedEips -> ()

@@ -6,9 +6,9 @@ open Dependency.Config
 open Dependency.Silos
 open Dependency.Shared
 
-let Handler (config: SlackConfig) = 
+let Handler (config: Config) = 
     let createNewUser period slackId silos= 
-        match Dependency.Silos.ResolveAccount silos (Slack slackId) with 
+        match Dependency.Silos.ResolveAccount silos (UserID.Slack slackId) with 
         | Some id -> None
         | _ -> 
             let userId = Guid.NewGuid().ToString()
@@ -19,21 +19,21 @@ let Handler (config: SlackConfig) =
             do monitor.Start period Dependency.Silos.TemporaryFilePath
             Some userId
 
-    if not <| config.Include 
+    if not <| config.SlackConfig.Include 
     then None
     else
         Some <| {
             Setup = function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId:string), _) -> 
                     fun period (userId, userRef) -> 
                         let (id, message) = 
                             match userId, userRef with 
-                            | Slack id, Some oldUser -> 
+                            | UserID.Slack id, Some oldUser -> 
                                 let user = silos.Monitors[oldUser]
                                 do ignore <| user.UserInstance
                                     .WithSlackId (Some id)
                                 id, sprintf "Slack account hooked to Id : %s" oldUser 
-                            | Slack id, None -> 
+                            | UserID.Slack id, None -> 
                                 let message = 
                                     match createNewUser period id silos with
                                     | Some ref_id -> sprintf "Slack account hooked with Id : %s" ref_id 
@@ -45,7 +45,7 @@ let Handler (config: SlackConfig) =
             Accounts = None
             Remove = None
             Watching =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId -> 
                         match userId with 
                         | Some userId -> 
@@ -55,7 +55,7 @@ let Handler (config: SlackConfig) =
                             |> Async.RunSynchronously
                         | None -> printfn "Account not yet setup, please setup the account"
             Watch =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
@@ -67,7 +67,7 @@ let Handler (config: SlackConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Unwatch =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
@@ -80,7 +80,7 @@ let Handler (config: SlackConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Notify = function 
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId email ->  
                         match userId with 
                         | Some userId -> 
@@ -92,7 +92,7 @@ let Handler (config: SlackConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Ignore = function 
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId ->  
                         match userId with 
                         | Some userId -> 

@@ -6,7 +6,7 @@ open Dependency.Config
 open Dependency.Silos
 open Dependency.Shared
 
-let Handler (config: DiscordConfig) = 
+let Handler (config: Config) = 
     let createNewUser period discordId silos= 
         match Dependency.Silos.ResolveAccount silos (Discord discordId) with 
         | Some id -> None
@@ -18,12 +18,12 @@ let Handler (config: DiscordConfig) =
             do Dependency.Silos.AddAccount user.LocalId monitor silos 
             do monitor.Start period Dependency.Silos.TemporaryFilePath
             Some userId
-    if not <| config.Include 
+    if not <| config.DiscordConfig.Include 
     then None
     else
         Some <| {
             Setup = function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId:uint64), _) -> 
                     fun period (userId, userRef) -> 
                         let (id, message) = 
                             match userId, userRef with 
@@ -44,7 +44,7 @@ let Handler (config: DiscordConfig) =
             Accounts = None
             Remove = None
             Watching =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId -> 
                         match userId with 
                         | Some userId -> 
@@ -54,7 +54,7 @@ let Handler (config: DiscordConfig) =
                             |> Async.RunSynchronously
                         | None -> printfn "Account not yet setup, please setup the account"
             Watch =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
@@ -66,7 +66,7 @@ let Handler (config: DiscordConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Unwatch =    function
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
@@ -79,7 +79,7 @@ let Handler (config: DiscordConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Notify = function 
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId email ->  
                         match userId with 
                         | Some userId -> 
@@ -91,7 +91,7 @@ let Handler (config: DiscordConfig) =
                             |> Async.RunSynchronously
                         | None -> printf "Account not yet setup, please setup the account"
             Ignore = function 
-                | Context((config, silos), _) -> 
+                | Context((silos, channelId), _) -> 
                     fun userId ->  
                         match userId with 
                         | Some userId -> 

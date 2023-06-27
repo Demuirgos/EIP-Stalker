@@ -13,17 +13,19 @@ let mutable client : DiscordSocketClient =
     discordSocketConfig.GatewayIntents <- privilage
     DiscordSocketClient(discordSocketConfig)
 
-let public Run config silos handler resolver=
+let public Run config ctx handler resolver=
     async {
         do! client.LoginAsync(TokenType.Bot, config.DiscordConfig.Token)
             |> Async.AwaitTask
 
         client.add_MessageReceived(fun msg -> 
             task {
-                if msg.Channel.Id = config.DiscordConfig.Channel then 
-                    do Shared.HandleMessage silos  (Discord msg.Author.Id, msg.Content) handler resolver
-                    do! msg.DeleteAsync()
-                return 0
+                let isSetupMessage = msg.Content.StartsWith "setup" && msg.Channel.Id = config.DiscordConfig.Channel
+                if  isSetupMessage || msg.Channel.GetChannelType() = ChannelType.DM
+                then
+                    do Shared.HandleMessage ctx  (UserID.Discord msg.Author.Id, msg.Content) handler resolver
+                    if isSetupMessage then
+                        do! msg.DeleteAsync()
             }
         )
 

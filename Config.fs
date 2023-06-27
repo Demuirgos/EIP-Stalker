@@ -11,8 +11,8 @@ type DiscordConfig = {
 type SlackConfig = {
     Include: bool
     Channel: string
-    Token: string
-    Secret: string
+    ApiToken: string
+    AppToken: string
 }
 
 type GithubConfig = {

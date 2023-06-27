@@ -41,13 +41,13 @@ let main args =
         Console.CancelKeyPress.Add(fun _ -> Silos.SaveInFile silos; exit 0)
         let discordThread = new Thread(
             fun () -> 
-            do Discord.Run config.Value (config.Value, silos) (Dependency.Handlers.Discord.Handler config.Value.DiscordConfig) (Silos.ResolveAccount silos)
+            do Discord.Run config.Value (silos, config.Value.DiscordConfig.Channel) (Dependency.Handlers.Discord.Handler config.Value) (Silos.ResolveAccount silos)
                 |> Async.RunSynchronously
         )
 
         let slackThread = new Thread(
             fun () -> 
-            do Slack.Run config.Value (config.Value, silos) (Dependency.Handlers.Slack.Handler config.Value.SlackConfig) (Silos.ResolveAccount silos)
+            do Slack.Run config.Value (silos, config.Value.SlackConfig.Channel) (Dependency.Handlers.Slack.Handler config.Value) (Silos.ResolveAccount silos)
         )
 
         slackThread.Start()

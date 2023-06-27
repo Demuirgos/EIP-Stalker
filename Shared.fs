@@ -11,16 +11,15 @@ type Message =
     | Metadata of Core.Metadata list 
     | Text of string
 
-
-type ID = 
+    
+type UserID = 
     | Discord of uint64
     | Slack of string
     | Guid of string
     | Admin
 
-
 type 't Handler = {
-    Setup : 't Context -> int -> (ID * string option) -> unit
+    Setup : 't Context -> int -> (UserID * string option) -> unit
     Accounts : Option<'t Context -> unit>
     Remove : Option<'t Context -> string option-> unit>
     Watching: 't Context -> string option-> unit
@@ -49,7 +48,7 @@ type User = {
 
 
 let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
-let rec HandleMessage (preContext:'a) ((userId, msgBody):ID * string) (commandHandler:'a Handler option) (accountResolver: ID -> string option)= 
+let rec HandleMessage (preContext:'a) ((userId, msgBody):UserID * string) (commandHandler:'a Handler option) (accountResolver: UserID -> string option)= 
     let user = accountResolver userId
     match commandHandler with 
     | None -> ()
@@ -85,5 +84,5 @@ let rec HandleMessage (preContext:'a) ((userId, msgBody):ID * string) (commandHa
 
 let rec ReadLiveCommand preCtx handler resolver= 
     printf "\n::> "
-    HandleMessage preCtx (Admin, Console.ReadLine()) handler resolver
+    HandleMessage preCtx (UserID.Admin, Console.ReadLine()) handler resolver
     do ReadLiveCommand preCtx handler resolver

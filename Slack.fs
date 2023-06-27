@@ -8,28 +8,29 @@ open Dependency.Shared
 open Dependency.Config
 open SlackNet.Events
 
-let mutable client : ISlackApiClient = Unchecked.defaultof<SlackApiClient>
+type Clients = {
+    WebSocket: ISlackSocketModeClient 
+    Api : ISlackApiClient
+}
 
-let MessageHandler silos config handler resolver=
+let mutable client : Clients = Unchecked.defaultof<Clients>
+
+let MessageHandler ctx config handler resolver=
     { new IEventHandler<MessageEvent>  with
         member this.Handle(slackEvent: MessageEvent) = 
             task {
-                if slackEvent.Channel = config.Channel then 
-                    HandleMessage silos (Slack slackEvent.User, slackEvent.Text) handler resolver
-                let! _ =  
-                    client.Chat.Delete(Utils.ToTimestamp(slackEvent.Timestamp), config.Channel, true)
-                    |> Async.AwaitTask
-                return ()
+                let isSetupMessage = slackEvent.Text.StartsWith "setup" &&  slackEvent.Channel = config.Channel
+                if  isSetupMessage || slackEvent.Channel.Chars 0 = 'D'
+                then
+                    HandleMessage ctx (UserID.Slack slackEvent.User, slackEvent.Text) handler resolver
+                    if isSetupMessage then 
+                        let! _ =  
+                            client.Api.Chat.Delete(Utils.ToTimestamp(slackEvent.Timestamp), config.Channel, true)
+                            |> Async.AwaitTask
+                        return ()
             }
     }
-
-let public Run (config:Config) silos handler resolver=
-    let handler = MessageHandler silos config.SlackConfig handler resolver
-    client <- SlackServiceBuilder()
-                    .UseApiToken(config.SlackConfig.Token)
-                    .RegisterEventHandler<MessageEvent>(handler)
-                    .GetApiClient()
-
+    
 let public SendMessageAsync  config userId (message: Message)= 
     let messageBody = 
         match message with 
@@ -47,10 +48,24 @@ let public SendMessageAsync  config userId (message: Message)=
             messageObj.Channel <- config.SlackConfig.Channel
             sprintf "%s" messageBody 
 
+
     messageObj.Text <- msg
     async {
-        let! _ = client.Chat.PostMessage(messageObj)
+        let! _ = client.Api.Chat.PostMessage(messageObj)
                  |> Async.AwaitTask
         return ()
     }
 
+let public Run (config:Config) ctx handler resolver=
+    let handler = MessageHandler ctx config.SlackConfig handler resolver
+    let builder = SlackServiceBuilder()
+                    .UseAppLevelToken(config.SlackConfig.AppToken)
+                    .UseApiToken(config.SlackConfig.ApiToken)
+                    .RegisterEventHandler<MessageEvent>(handler)
+    client <- {
+        WebSocket = builder.GetSocketModeClient()
+        Api = builder.GetApiClient()
+    }
+
+    do client.WebSocket.Connect()
+        |> Async.AwaitTask |> Async.RunSynchronously

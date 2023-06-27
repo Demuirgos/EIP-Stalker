@@ -34,12 +34,12 @@
     let RemoveAccount userId silos = 
         do silos.Monitors.Remove(userId)
 
-    let ResolveAccount (silos:Silos) id = 
+    let ResolveAccount (silos:Silos) (id:UserID) = 
         let filter = 
             function
-            | Discord d_id -> fun (user:User) -> user.DiscordId = Some d_id
-            | Slack s_id -> fun (user:User) -> user.SlackId= Some s_id
-            | Guid g_id -> fun (user:User) -> user.LocalId = g_id
+            | UserID.Discord d_id -> fun (user:User) -> user.DiscordId = Some d_id
+            | UserID.Slack s_id -> fun (user:User) -> user.SlackId= Some s_id
+            | UserID.Guid g_id -> fun (user:User) -> user.LocalId = g_id
 
         let result = 
             silos.Monitors.Values 
