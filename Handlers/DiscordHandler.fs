@@ -14,9 +14,9 @@ let Handler (config: Config) =
             let userId = Guid.NewGuid().ToString()
             let user = (User.Create (userId))
                         .WithDiscordId (Some discordId)
-            let monitor = Monitor(user, silos.Config)
+            let monitor = Monitor(period, user, silos.Config)
             do Dependency.Silos.AddAccount user.LocalId monitor silos 
-            do monitor.Start period Dependency.Silos.TemporaryFilePath
+            do monitor.Start Dependency.Silos.TemporaryFilePath
             Some userId
     if not <| config.DiscordConfig.Include 
     then None
@@ -34,7 +34,7 @@ let Handler (config: Config) =
                                 id, sprintf "Discord account hooked to Id : %s" oldUser 
                             | Discord id, None -> 
                                 let message = 
-                                    match createNewUser period id silos with
+                                    match createNewUser (Some period) id silos with
                                     | Some ref_id -> sprintf "Discord account hooked with Id : %s" ref_id 
                                     | None -> sprintf "Account with Id : %d already exists" id
                                 id, message

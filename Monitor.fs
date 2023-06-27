@@ -14,16 +14,21 @@ open System.Collections.Generic
 
 
 [<Class>]
-type Monitor(recepient: User, config: Config) = 
+type Monitor(period:int option, recepient: User, config: Config) = 
     let mutable State : Dictionary<int, string> = Dictionary<_, _>()
     let mutable Flagged : int Set = Set.empty
     let mutable Config : Config = config
+    let mutable Period : int = 
+        match period with 
+        | Some time -> time 
+        | None -> 3600 * 24
+
     let CancellationToken = new CancellationTokenSource()
 
     new(path: string, filename:string, config:Config) as self= 
         let user = User.Create filename
-        Monitor(user, config)
-        then self.Start (3600 * 24) path
+        Monitor(None, user, config)
+        then self.Start path
 
 
     member val UserInstance : User = recepient with get, set
@@ -38,7 +43,7 @@ type Monitor(recepient: User, config: Config) =
 
             State = State
             Flagged =  Flagged
-            Period = 10
+            Period = Period
         }
 
     member private _.GetRequestWithAuth (key:string) eip =
@@ -69,7 +74,8 @@ type Monitor(recepient: User, config: Config) =
                 .WithDiscordId(snapshot.Discord)
                 .WithSlackId(snapshot.Slack)
                 .WithEmail(snapshot.Email)
-                
+
+            Period <- snapshot.Period
             State <- snapshot.State
             self.Watch snapshot.Flagged
             printfn "::> Restore : %A" State
@@ -118,7 +124,6 @@ type Monitor(recepient: User, config: Config) =
 
     member private self.HandleEips eips= 
         let eipData = self.GetEipMetadata eips 
-        State[4200] <- "1f407df79940a154a1e584cdebdf79ef2f579b57"
         let changedEips = self.CompareDiffs State eipData eips
         match changedEips with 
         | _ when Set.isEmpty changedEips -> ()
@@ -159,12 +164,12 @@ type Monitor(recepient: User, config: Config) =
 
 
 
-    member public self.Start period silosPath= 
+    member public self.Start silosPath= 
         let thread = 
             new Thread(fun () -> 
                 try 
                     self.ReadInFile silosPath
-                    let actions = self.RunEvery (self.HandleEips) period
+                    let actions = self.RunEvery (self.HandleEips) Period
                     Async.RunSynchronously(actions, 0, CancellationToken.Token)
                 with 
                 | :? System.Exception -> printf "Stopped reading commands\n::> "
