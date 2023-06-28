@@ -36,7 +36,7 @@ let public SendMessageAsync  config userId (message: Message)=
         match message with 
         | Text body -> body 
         | Metadata metadata -> 
-            String.Join('\n', metadata |> List.map (fun entry -> sprintf "Eip %d: %s" entry.Number entry.Link))
+            String.Join('\n', metadata |> List.map (fun entry -> sprintf "Eip %d: <%s>" entry.Number entry.Link))
     
     let messageObj = WebApi.Message()
     let msg = 
