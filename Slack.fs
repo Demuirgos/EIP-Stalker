@@ -19,15 +19,14 @@ let MessageHandler ctx config handler resolver=
     { new IEventHandler<MessageEvent>  with
         member this.Handle(slackEvent: MessageEvent) = 
             task {
-                let isSetupMessage = slackEvent.Text.StartsWith "setup" &&  slackEvent.Channel = config.Channel
-                if  isSetupMessage || slackEvent.Channel.Chars 0 = 'D'
-                then
-                    HandleMessage ctx (UserID.Slack slackEvent.User, slackEvent.Text) handler resolver
-                    if isSetupMessage then 
-                        let! _ =  
-                            client.Api.Chat.Delete(Utils.ToTimestamp(slackEvent.Timestamp), config.Channel, true)
-                            |> Async.AwaitTask
-                        return ()
+                if not (slackEvent :? MessageDeleted) then 
+                        let isSetupMessage = slackEvent.Text.StartsWith "setup" &&  slackEvent.Channel = config.Channel
+                        if  isSetupMessage || slackEvent.Channel.Chars 0 = 'D'
+                        then
+                            HandleMessage ctx (UserID.Slack slackEvent.User, slackEvent.Text) handler resolver
+                            if isSetupMessage then 
+                                let! res =  client.Api.Chat.Delete(slackEvent.EventTs, config.Channel, true)
+                                return ()
             }
     }
     
