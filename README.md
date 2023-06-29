@@ -31,7 +31,7 @@ A simple app that monitors Eip changes
          }
       }
     ```
-### Eip change monitor :
+### Commands :
 ```
 >> setup --period (period:/d+) [--refUser (id:guid)]
 ::? Sets up a user monitor with the [period] polling time, if the refUser is provided it will try to attach the local app Id [Discord|Slack] to the id (the refUser)
