@@ -59,7 +59,7 @@ let Handler (config: Config) =
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
-                            let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                            let eips = [ yield! List.takeWhile IsNumber eips ] |> List.map Int32.Parse
                             let user =  silos.Monitors[userId]
                             do user.Watch (Set.ofList eips)
                             let message = sprintf "Started Watching : %A" eips
@@ -71,7 +71,7 @@ let Handler (config: Config) =
                     fun userId eips -> 
                         match userId with 
                         | Some userId -> 
-                            let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                            let eips = [ yield! List.takeWhile IsNumber eips ] |> List.map Int32.Parse
                             let user =  silos.Monitors[userId]
                             do user.Unwatch (Set.ofList eips)
                                     

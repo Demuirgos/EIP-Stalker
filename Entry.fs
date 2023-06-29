@@ -56,6 +56,7 @@ let main args =
             do Console.Run (silos) (Dependency.Handlers.Console.Handler config.Value) (Silos.ResolveAccount silos)
         )
 
+        consoleThread.Start()
         slackThread.Start()
         discordThread.Start()
     0

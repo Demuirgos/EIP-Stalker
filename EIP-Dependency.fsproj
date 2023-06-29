@@ -5,22 +5,23 @@
     <RootNamespace>EIP_Dependency</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="EmailDummy.json" />
     <Compile Include="Snapshot.fs" />
     <Compile Include="Config.fs" />
-	<Content Include="EmailDummy.json" />
 	<Compile Include="Metadata.fs" />
 	<Compile Include="Shared.fs" />
 	<Compile Include="Mail.fs" />
 	<Compile Include="Slack.fs" />
 	<Compile Include="Discord.fs" />
-	<Compile Include="Monitor.fs" />
 	<Compile Include="Console.fs" />
+	<Compile Include="Monitor.fs" />
 	<Compile Include="Silos.fs" />
 	<Compile Include="Handlers\DiscordHandler.fs" />
 	<Compile Include="Handlers\SlackHandler.fs" />
     <Compile Include="Handlers\ConsoleHandler.fs" />
 	<Compile Include="Entry.fs" />
   </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <PackageReference Include="Discord.net" Version="3.10.0" />
     <PackageReference Include="FSharp.Data" Version="6.0.0" />

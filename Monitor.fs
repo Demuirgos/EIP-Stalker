@@ -129,7 +129,6 @@ type Monitor(period:int option, recepient: User, config: Config) =
         | _ when Set.isEmpty changedEips -> ()
         | _ -> 
             let metadata = changedEips |> Set.map (fun eip -> Metadata.FetchMetadata eip 0)
-            printf "Changed EIPs : %A\n::> " (metadata)
             let results = 
                 let rec flatten flatres res = 
                     match res with 
@@ -141,6 +140,8 @@ type Monitor(period:int option, recepient: User, config: Config) =
                 |> List.ofSeq
                 |> flatten []
 
+            if Shared.IsAdmin self.UserInstance.LocalId then
+                Console.PrintToConsole (Metadata results)
 
             match self.UserInstance.DiscordId with
             | Some(userId) -> 

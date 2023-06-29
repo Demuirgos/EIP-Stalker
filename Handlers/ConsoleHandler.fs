@@ -4,6 +4,7 @@ open System
 open Dependency.Monitor
 open Dependency.Config
 open Dependency.Silos
+open Dependency.Console
 open Dependency.Shared
 
 let Handler (config: Config) = 
@@ -15,37 +16,38 @@ let Handler (config: Config) =
             Setup = None
             Accounts = Some <| function
                 | Context(silos, _) ->  
-                    printfn "Current Accounts: %A" (silos.Monitors.Keys)
+                    Dependency.Console.PrintToConsole <| Text $"Current Accounts: {silos.Monitors.Keys}"
             Remove = None
             Watching =    function
                 | Context(silos, _) -> 
                     fun _ -> 
                         let user = silos.Monitors[userId]
-                        printfn "Currently Watching : %A" (user.Current())
+                        let message = sprintf "Currently Watching : %A" (user.Current())
+                        Dependency.Console.PrintToConsole <| Text message
             Watch =    function
                 | Context(silos, _) -> 
                     fun _ eips -> 
-                        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                        let eips = [ yield! List.takeWhile IsNumber eips ] |> List.map Int32.Parse
                         let user =  silos.Monitors[userId]
                         do user.Watch (Set.ofList eips)
-                        printfn "Started Watching : %A" eips
+                        Dependency.Console.PrintToConsole <| Text $"Started Watching : {eips}" 
             Unwatch =    function
                 | Context(silos, _) -> 
                     fun _ eips -> 
-                        let eips = [ yield! List.takeWhile isNumber eips ] |> List.map Int32.Parse
+                        let eips = [ yield! List.takeWhile IsNumber eips ] |> List.map Int32.Parse
                         let user =  silos.Monitors[userId]
                         do user.Unwatch (Set.ofList eips)
-                        printfn "Stopped Watching : %A" eips
+                        Dependency.Console.PrintToConsole <| Text  $"Stopped Watching : {eips}"
             Notify = function 
                 | Context(silos, _) -> 
                     fun _ email ->  
                         let user =  silos.Monitors[userId]
                         do ignore <| user.UserInstance.WithEmail (Some email)
-                        printfn "Email %s notifications activated" email
+                        Dependency.Console.PrintToConsole <| Text $"Email {email} notifications activated" 
             Ignore = function 
                 | Context(silos, _) -> 
                     fun _ ->  
                         let user =  silos.Monitors[userId]
                         do ignore <| user.UserInstance.WithEmail (None)
-                        printfn "Email notifications deactivated" 
+                        Dependency.Console.PrintToConsole <| Text "Email notifications deactivated" 
         }

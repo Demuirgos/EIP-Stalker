@@ -46,8 +46,11 @@ type User = {
             member self.WithSlackId slackId = self.SlackId <- slackId; self
             member self.WithEmail email = self.Email <- email; self
 
+let IsAdmin userId =
+    let rootId = System.Guid.Empty.ToString()
+    rootId = userId
 
-let isNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
+let IsNumber listOfNumericalStrings = Seq.forall Char.IsDigit listOfNumericalStrings
 let rec HandleMessage (preContext:'a) ((userId, msgBody):UserID * string) (commandHandler:'a Handler option) (accountResolver: UserID -> string option)= 
     let user = accountResolver userId
     match commandHandler with 
