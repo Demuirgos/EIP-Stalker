@@ -25,9 +25,9 @@ A simple app that monitors Eip changes
          }
           SlackConfig: {
             Include: bool
-            Channel: string
-            ApiToken: string
-            AppToken: string
+            Channel: string | null
+            ApiToken: string | null
+            AppToken: string | null
          }
       }
     ```
