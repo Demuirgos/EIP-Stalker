@@ -83,7 +83,10 @@
                     SlackId = None
                     Email = None
                 }
-                do silos.Monitors[adminId] <- Monitor(Some(3600 * 24), user, Config)
+
+                let monitor = Monitor(Some(20), user, Config)
+                do silos.Monitors[adminId] <- monitor
+                do monitor.Start TemporaryFilePath
                 silos
         with
             | _ -> Empty Config

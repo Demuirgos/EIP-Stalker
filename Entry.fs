@@ -53,7 +53,10 @@ let main args =
         
         let consoleThread = new Thread(
             fun () -> 
-            do Console.Run (silos) (Dependency.Handlers.Console.Handler config.Value) (Silos.ResolveAccount silos)
+            try
+                do Console.Run (silos) (Dependency.Handlers.Console.Handler config.Value) (Silos.ResolveAccount silos)
+            with
+            | _ ->  ()
         )
 
         consoleThread.Start()
