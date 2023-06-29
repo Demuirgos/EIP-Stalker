@@ -33,6 +33,7 @@ let main args =
 
     let parsedArgs = ParseCommandlineArgs (Array.toList args) Map.empty
     let smtpConfigsPath = Map.tryFind "config" parsedArgs |> Option.map List.tryHead |> Option.flatten
+
     match smtpConfigsPath with 
     | None -> failureHelpMessage 
     | Some path -> 
@@ -44,10 +45,15 @@ let main args =
             do Discord.Run config.Value (silos, config.Value.DiscordConfig.Channel) (Dependency.Handlers.Discord.Handler config.Value) (Silos.ResolveAccount silos)
                 |> Async.RunSynchronously
         )
-
+        
         let slackThread = new Thread(
             fun () -> 
             do Slack.Run config.Value (silos, config.Value.SlackConfig.Channel) (Dependency.Handlers.Slack.Handler config.Value) (Silos.ResolveAccount silos)
+        )
+        
+        let consoleThread = new Thread(
+            fun () -> 
+            do Console.Run (silos) (Dependency.Handlers.Console.Handler config.Value) (Silos.ResolveAccount silos)
         )
 
         slackThread.Start()

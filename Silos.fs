@@ -40,6 +40,7 @@
             | UserID.Discord d_id -> fun (user:User) -> user.DiscordId = Some d_id
             | UserID.Slack s_id -> fun (user:User) -> user.SlackId= Some s_id
             | UserID.Guid g_id -> fun (user:User) -> user.LocalId = g_id
+            | UserID.Admin -> fun (user:User) -> user.LocalId = Guid.Empty.ToString()
 
         let result = 
             silos.Monitors.Values 
@@ -67,9 +68,22 @@
                             let monitor = Monitor(path, filename, Config)
                             filename, monitor
                         ) files
-            {
-                Monitors= Dictionary<_, _>(dict kvp)
-                Config = Config
-            }
+            let silos = {
+                    Monitors= Dictionary<_, _>(dict kvp)
+                    Config = Config
+                }
+
+            let adminId = Guid.Empty.ToString()
+            if silos.Monitors.ContainsKey(adminId) then 
+                silos
+            else 
+                let user  = {
+                    LocalId = adminId
+                    DiscordId = None
+                    SlackId = None
+                    Email = None
+                }
+                do silos.Monitors[adminId] <- Monitor(Some(3600 * 24), user, Config)
+                silos
         with
             | _ -> Empty Config

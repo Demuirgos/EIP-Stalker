@@ -19,7 +19,7 @@ type UserID =
     | Admin
 
 type 't Handler = {
-    Setup : 't Context -> int -> (UserID * string option) -> unit
+    Setup : Option<'t Context -> int -> (UserID * string option) -> unit>
     Accounts : Option<'t Context -> unit>
     Remove : Option<'t Context -> string option-> unit>
     Watching: 't Context -> string option-> unit
@@ -56,11 +56,14 @@ let rec HandleMessage (preContext:'a) ((userId, msgBody):UserID * string) (comma
         let commandLine = msgBody.Split() |> List.ofArray |> List.map (fun str -> str.Trim())
         match commandLine with 
         | "setup"::"--period"::period::rest ->
-            let userRef = 
-                match rest with 
-                | "--userRef"::[userRef] -> Some userRef
-                | _ -> None
-            handler.Setup (Context (preContext, msgBody)) (Int32.Parse period) (userId, userRef)
+            match handler.Setup with 
+            | Some setup -> 
+                let userRef = 
+                    match rest with 
+                    | "--userRef"::[userRef] -> Some userRef
+                    | _ -> None
+                setup (Context (preContext, msgBody)) (Int32.Parse period) (userId, userRef)
+            | None -> ()
         | ["accounts?"]-> 
             match handler.Accounts with 
             | Some(show) -> show (Context (preContext, msgBody)) 

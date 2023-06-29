@@ -14,9 +14,11 @@
 	<Compile Include="Slack.fs" />
 	<Compile Include="Discord.fs" />
 	<Compile Include="Monitor.fs" />
+	<Compile Include="Console.fs" />
 	<Compile Include="Silos.fs" />
 	<Compile Include="Handlers\DiscordHandler.fs" />
 	<Compile Include="Handlers\SlackHandler.fs" />
+    <Compile Include="Handlers\ConsoleHandler.fs" />
 	<Compile Include="Entry.fs" />
   </ItemGroup>
   <ItemGroup>

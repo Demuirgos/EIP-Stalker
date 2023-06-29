@@ -23,7 +23,7 @@ let Handler (config: Config) =
     then None
     else
         Some <| {
-            Setup = function
+            Setup = Some <| function
                 | Context((silos, channelId:string), _) -> 
                     fun period (userId, userRef) -> 
                         let (id, message) = 
